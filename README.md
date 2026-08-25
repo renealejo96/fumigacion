@@ -151,3 +151,32 @@ python -m unittest discover -s tests
    ```
 4. El contenedor inicializará automáticamente la base de datos PostgreSQL, creará las tablas y el usuario administrador inicial (`admin` / `admin123`).
 
+---
+
+### 🌐 Configuración de Nginx Reverse Proxy (Hostinger)
+
+Para apuntar un dominio/subdominio (ej: `fumigacion.tudominio.com`) al contenedor en el puerto `8095`:
+
+```nginx
+server {
+    listen 80;
+    server_name fumigacion.tudominio.com;
+
+    client_max_body_size 64M;
+
+    location / {
+        proxy_pass http://127.0.0.1:8095;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+Para generar el certificado SSL con Certbot:
+```bash
+sudo certbot --nginx -d fumigacion.tudominio.com
+```
+
+

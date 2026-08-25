@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  # Base de Datos PostgreSQL
+  # Base de Datos PostgreSQL (Aislada en red interna)
   db:
     image: postgres:16-alpine
     container_name: fumigacion_db
@@ -12,8 +12,8 @@ services:
       POSTGRES_DB: ${DB_NAME:-fumigacion_db}
       PGDATA: /var/lib/postgresql/data/pgdata
     ports:
-      # Puerto Host personalizado para evitar colisión con otras bases de datos (5495 -> 5432)
-      - "${DB_PORT:-5495}:5432"
+      # Exposición solo local (127.0.0.1) para túneles SSH / Adminer seguro sin abrir puerto a internet público
+      - "127.0.0.1:${DB_PORT:-5495}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -44,7 +44,7 @@ services:
       - GUNICORN_THREADS=${GUNICORN_THREADS:-2}
       - GUNICORN_TIMEOUT=${GUNICORN_TIMEOUT:-120}
     ports:
-      # Puerto Host personalizado para la aplicación web (8095 -> 5000)
+      # Mapeo al puerto 8095 (disponible en el VPS y listo para Reverse Proxy Nginx)
       - "${APP_PORT:-8095}:5000"
     volumes:
       - ./uploads:/app/uploads
