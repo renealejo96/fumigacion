@@ -1,0 +1,541 @@
+{% extends "base.html" %}
+
+{% block title %}Orden de Compra | AgroFumigación{% endblock %}
+{% block page_header %}Orden de Compra &bull; Pedido a 15 Días{% endblock %}
+
+{% block extra_css %}
+<style>
+.bed-config-table th {
+    background-color: #f8fafc;
+    border: 1px solid #cbd5e1;
+    font-size: 0.775rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    padding: 6px 4px;
+    text-align: center;
+}
+.bed-config-table td {
+    border: 1px solid #cbd5e1;
+    padding: 6px 8px;
+    vertical-align: middle;
+}
+.row-state-veg {
+    background-color: #ffffff;
+}
+.row-state-prod {
+    background-color: #f8fafc;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+    <a href="{{ url_for('dashboard') }}" class="text-decoration-none text-muted small">
+        <i class="fa-solid fa-arrow-left me-1"></i> Volver al Dashboard
+    </a>
+</div>
+
+<!-- Header Card -->
+<div class="card mb-4 shadow-sm border-start border-4 border-warning">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+            <div>
+                <h3 class="fw-bold text-dark mb-1">
+                    <i class="fa-solid fa-cart-shopping text-warning me-2"></i>Orden de Compra a 15 Días
+                </h3>
+                <p class="text-muted mb-0">Configuración de camas y pedido de agroquímicos calculado por número de camas configuradas</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Week Selection -->
+<div class="card mb-4 shadow-sm">
+    <div class="card-body">
+        <form method="GET" action="{{ url_for('orden_compra.index') }}">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-4">
+                    <label class="form-label fw-bold">
+                        <i class="fa-solid fa-calendar-check text-primary me-1"></i> Semana de Planificación
+                    </label>
+                    <select name="week" class="form-select" onchange="this.form.submit()">
+                        {% for w in week_options %}
+                        <option value="{{ w.value }}" {% if w.value == selected_week %}selected{% endif %}>
+                            {{ w.label }} {% if w.is_target %}(A 15 días){% endif %}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-8 text-end">
+                    {% if rotation %}
+                    <a href="{{ url_for('orden_compra.exportar_excel', week=selected_week) }}" class="btn btn-success btn-sm fw-bold shadow-sm">
+                        <i class="fa-solid fa-file-excel me-1"></i> Exportar a Excel
+                    </a>
+                    <a href="{{ url_for('fumigacion.rotacion_detalle', rotation_id=rotation.id) }}" class="btn btn-primary btn-sm fw-bold">
+                        <i class="fa-solid fa-eye me-1"></i> Ver Rotación Completa
+                    </a>
+                    {% else %}
+                    <div class="alert alert-warning mb-0 py-2 px-3 d-inline-block">
+                        <i class="fa-solid fa-triangle-exclamation me-2"></i>
+                        <strong>No existe rotación para la Semana {{ selected_week }}</strong>
+                    </div>
+                    <a href="{{ url_for('fumigacion.rotacion_crear') }}?week={{ selected_week }}" class="btn btn-warning btn-sm fw-bold">
+                        <i class="fa-solid fa-plus me-1"></i> Crear Rotación para Semana {{ selected_week }}
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if rotation %}
+<!-- Beds Configuration Section with Variety Summary -->
+<div class="card mb-4 shadow-sm">
+    <div class="card-header bg-light d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div>
+            <h5 class="fw-bold text-dark mb-0">
+                <i class="fa-solid fa-bed me-2 text-primary"></i>Configuración de Camas (Base del Pedido)
+            </h5>
+            <div class="text-muted small">Resumen consolidado por variedad y detalle por bloque</div>
+        </div>
+        <div class="d-flex gap-2 align-items-center">
+            <span class="badge bg-primary fs-6">{{ total_standard_beds_sum|format_number(2) }} Camas Std Totales</span>
+            <span class="badge bg-secondary fs-6">{{ total_beds_count }} Bloques/Segmentos</span>
+        </div>
+    </div>
+    <div class="card-body p-3 bg-light border-bottom">
+        <!-- Variety Summary Pills & Quick Table -->
+        <h6 class="fw-bold text-dark mb-2">
+            <i class="fa-solid fa-chart-pie text-success me-1"></i> Resumen de Camas por Variedad / Cultivo:
+        </h6>
+        {% if variety_summary_list %}
+        <div class="row g-2 mb-3">
+            {% for var in variety_summary_list %}
+            <div class="col-md-4 col-lg-3">
+                <div class="p-2 border rounded bg-white shadow-xs">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <strong class="text-primary text-truncate" title="{{ var.crop_name }}">{{ var.crop_name }}</strong>
+                        <span class="badge bg-primary-subtle text-primary fw-bold">{{ var.total_std_beds|format_number(2) }} std</span>
+                    </div>
+                    <div class="d-flex justify-content-between small text-muted" style="font-size: 0.75rem;">
+                        <span>Veg: <strong class="text-success">{{ var.veg_std_beds|format_number(1) }}</strong></span>
+                        <span>Prod: <strong class="text-primary">{{ var.prod_std_beds|format_number(1) }}</strong></span>
+                        <span>Bloques: <strong>{{ var.segments_count }}</strong></span>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Compact Variety Table -->
+        <div class="table-responsive bg-white rounded border mb-1">
+            <table class="table table-sm table-bordered align-middle mb-0 text-center" style="font-size: 0.8rem;">
+                <thead class="table-light">
+                    <tr>
+                        <th class="text-start">Cultivo / Variedad</th>
+                        <th class="text-end" style="width: 130px;">Camas Std Totales</th>
+                        <th class="text-end" style="width: 120px;">Veg (Std)</th>
+                        <th class="text-end" style="width: 120px;">Prod (Std)</th>
+                        <th class="text-end" style="width: 110px;">N° Bloques</th>
+                        <th class="text-end" style="width: 130px;">Litros Estimados</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for var in variety_summary_list %}
+                    <tr>
+                        <td class="text-start fw-bold text-dark">{{ var.crop_name }}</td>
+                        <td class="text-end fw-bold text-primary">{{ var.total_std_beds|format_number(2) }}</td>
+                        <td class="text-end text-success fw-semibold">{{ var.veg_std_beds|format_number(2) }}</td>
+                        <td class="text-end text-primary fw-semibold">{{ var.prod_std_beds|format_number(2) }}</td>
+                        <td class="text-end text-muted">{{ var.segments_count }}</td>
+                        <td class="text-end fw-bold text-dark">{{ var.total_liters|format_number(1) }} L</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot class="table-secondary fw-bold">
+                    <tr>
+                        <td class="text-start">TOTAL GENERAL:</td>
+                        <td class="text-end text-primary">{{ total_standard_beds_sum|format_number(2) }}</td>
+                        <td class="text-end text-success">
+                            {{ variety_summary_list|sum(attribute='veg_std_beds')|format_number(2) }}
+                        </td>
+                        <td class="text-end text-primary">
+                            {{ variety_summary_list|sum(attribute='prod_std_beds')|format_number(2) }}
+                        </td>
+                        <td class="text-end">{{ total_beds_count }}</td>
+                        <td class="text-end text-dark">
+                            {{ variety_summary_list|sum(attribute='total_liters')|format_number(1) }} L
+                        </td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-muted small">No hay camas calculadas para mostrar el resumen por variedad.</div>
+        {% endif %}
+    </div>
+
+    <!-- Detailed Bed Configuration Table -->
+    <div class="card-body p-0">
+        <div class="p-2 bg-white border-bottom small fw-bold text-muted d-flex justify-content-between align-items-center">
+            <span><i class="fa-solid fa-list me-1"></i> Detalle Bloque a Bloque:</span>
+            <span class="text-muted fw-normal" style="font-size: 0.75rem;">Scroll para ver todos los bloques</span>
+        </div>
+        <div class="table-responsive" style="max-height: 450px;">
+            <table class="table table-sm table-hover align-middle mb-0 bed-config-table">
+                <thead class="sticky-top">
+                    <tr>
+                        <th style="width: 80px;">Zona</th>
+                        <th style="width: 80px;">Bloque</th>
+                        <th style="width: 50px;">Sufijo</th>
+                        <th style="width: 120px;">Cultivo / Variedad</th>
+                        <th style="width: 60px;">Edad</th>
+                        <th style="width: 130px;">Camas (Ini - Fin)</th>
+                        <th style="width: 85px;">Camas Std</th>
+                        <th style="width: 80px;">L/Cama</th>
+                        <th style="width: 120px;">Estado</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if bed_configuration and bed_configuration is iterable and bed_configuration is not string %}
+                        {% for seg in bed_configuration %}
+                        {% if seg is mapping %}
+                        <tr class="{% if seg.phenological_stage == 'VEGETATIVO' %}row-state-veg{% else %}row-state-prod{% endif %}">
+                            <td class="text-center font-monospace small">{{ seg.get('zone', '') }}</td>
+                            <td class="text-center fw-bold">{{ seg.get('block_name', '') }}</td>
+                            <td class="text-center fw-bold text-primary">{{ seg.get('suffix', '') }}</td>
+                            <td class="fw-semibold">{{ seg.get('crop_name', '') }}</td>
+                            <td class="text-center">{{ seg.get('real_age', '') }}</td>
+                            <td class="text-center">{{ seg.get('bed_start', '') }} - {{ seg.get('bed_end', '') }}</td>
+                            <td class="text-end fw-bold">{{ seg.get('standard_beds', 0)|format_number(2) }}</td>
+                            <td class="text-end">{{ seg.get('liters_per_bed', 0)|format_number(1) }}</td>
+                            <td class="text-center">
+                                <span class="badge {% if seg.get('phenological_stage') == 'VEGETATIVO' %}bg-success{% else %}bg-primary{% endif %}">
+                                    {{ seg.get('phenological_stage', 'N/A') }}
+                                </span>
+                            </td>
+                        </tr>
+                        {% endif %}
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="9" class="text-center text-muted py-4">
+                                <i class="fa-solid fa-info-circle me-2"></i>
+                                No hay configuración de camas guardada. Ve a la rotación y configura las camas en "Revisión y Calibración".
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Budget Adjustments Section -->
+<div class="card mb-4 shadow-sm border-warning border-2">
+    <div class="card-header bg-warning bg-opacity-10 d-flex justify-content-between align-items-center">
+        <h5 class="fw-bold text-dark mb-0">
+            <i class="fa-solid fa-calculator me-2 text-warning"></i>Ajustes de Presupuesto (Camas Adicionales)
+        </h5>
+        <span class="badge bg-warning text-dark">Inflado de Camas por Siembra/Poda</span>
+    </div>
+    <div class="card-body">
+        <div class="alert alert-info mb-3">
+            <i class="fa-solid fa-lightbulb me-2"></i>
+            <strong>¿Para qué sirve esto?</strong> Si el plano de cultivo está atrasado y no tienes las camas de las siembras/podas recientes, 
+            puedes agregar camas de presupuesto aquí para que se sumen al pedido. Ejemplo: si vas a sembrar 50 camas de MOONWALK de 2 semanas, agrégalas aquí.
+        </div>
+        
+        <form id="form-budget-adjustments">
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered align-middle mb-3" id="table-budget">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 150px;">Cultivo/Variedad</th>
+                            <th style="width: 80px;">Edad (sem)</th>
+                            <th style="width: 120px;">Estado</th>
+                            <th style="width: 140px;">Camas Presupuesto</th>
+                            <th style="width: 200px;">Motivo</th>
+                            <th style="width: 80px;">Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody id="budget-rows">
+                        <!-- Rows will be added dynamically -->
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="d-flex gap-2 justify-content-end">
+                <button type="button" class="btn btn-outline-primary btn-sm" id="btn-add-budget-row">
+                    <i class="fa-solid fa-plus me-1"></i> Agregar Fila de Presupuesto
+                </button>
+                <button type="button" class="btn btn-warning btn-sm fw-bold" id="btn-recalculate">
+                    <i class="fa-solid fa-calculator me-1"></i> Recalcular Pedido con Presupuesto
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Requisition Summary -->
+{% if requisition %}
+<div class="card shadow-sm">
+    <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+        <h5 class="fw-bold mb-0"><i class="fa-solid fa-clipboard-check me-2"></i>Requisición Calculada a 15 Días</h5>
+        <div class="d-flex gap-2 align-items-center">
+            {% if requisition.status == 'APROBADO' %}
+            <span class="badge bg-light text-success border border-success fs-6">
+                <i class="fa-solid fa-check-circle me-1"></i> APROBADO
+            </span>
+            {% else %}
+            <span class="badge bg-light text-warning border border-warning fs-6">
+                <i class="fa-solid fa-clock me-1"></i> PENDIENTE
+            </span>
+            <button type="button" class="btn btn-sm btn-light fw-bold" id="btn-approve-order">
+                <i class="fa-solid fa-check me-1"></i> Aprobar Orden
+            </button>
+            {% endif %}
+        </div>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm table-bordered align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Código</th>
+                        <th>Nombre Comercial</th>
+                        <th>Unidad</th>
+                        <th class="text-end">Cantidad Necesaria</th>
+                        <th>Plaga / Blanco</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in requisition.items %}
+                    <tr>
+                        <td class="fw-bold text-primary">{{ item.product_code }}</td>
+                        <td>{{ item.commercial_name }}</td>
+                        <td>{{ item.unit }}</td>
+                        <td class="text-end fw-bold text-success">{{ item.quantity_forecast|format_product(item.unit) }}</td>
+                        <td class="small text-muted">{{ item.pest or '-' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% else %}
+<div class="alert alert-warning shadow-sm">
+    <i class="fa-solid fa-exclamation-triangle me-2"></i>
+    <strong>No hay rotación creada</strong> para la semana {{ selected_week }}. 
+    <a href="{{ url_for('fumigacion.rotacion_crear') }}" class="alert-link">Crear rotación ahora</a>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Budget adjustments functionality
+let budgetRowCounter = 0;
+
+// Crops and ages available
+const availableCrops = {{ active_crops|tojson if active_crops else '[]'|safe }};
+const phenStages = ['VEGETATIVO', 'PRODUCTIVO'];
+
+// Add budget row
+document.getElementById('btn-add-budget-row')?.addEventListener('click', function() {
+    budgetRowCounter++;
+    const tbody = document.getElementById('budget-rows');
+    const row = document.createElement('tr');
+    row.id = `budget-row-${budgetRowCounter}`;
+    row.innerHTML = `
+        <td>
+            <input type="text" class="form-control form-control-sm" name="crop_name[]" 
+                   placeholder="Ej: MOONWALK" list="crop-list-${budgetRowCounter}" required>
+            <datalist id="crop-list-${budgetRowCounter}">
+                ${availableCrops.map(c => `<option value="${c.name}">`).join('')}
+            </datalist>
+        </td>
+        <td>
+            <input type="number" class="form-control form-control-sm" name="age[]" 
+                   placeholder="Ej: 2" min="0" max="200" required>
+        </td>
+        <td>
+            <select class="form-select form-select-sm" name="stage[]" required>
+                <option value="">Seleccionar...</option>
+                <option value="VEGETATIVO">VEGETATIVO</option>
+                <option value="PRODUCTIVO">PRODUCTIVO</option>
+            </select>
+        </td>
+        <td>
+            <input type="number" class="form-control form-control-sm" name="beds[]" 
+                   placeholder="Ej: 50" min="0.1" step="0.1" required>
+        </td>
+        <td>
+            <input type="text" class="form-control form-control-sm" name="reason[]" 
+                   placeholder="Ej: Siembras semana 33">
+        </td>
+        <td class="text-center">
+            <button type="button" class="btn btn-sm btn-danger" onclick="removeBudgetRow(${budgetRowCounter})">
+                <i class="fa-solid fa-trash"></i>
+            </button>
+        </td>
+    `;
+    tbody.appendChild(row);
+});
+
+// Remove budget row
+function removeBudgetRow(rowId) {
+    const row = document.getElementById(`budget-row-${rowId}`);
+    if (row) row.remove();
+}
+
+// Recalculate with budget
+document.getElementById('btn-recalculate')?.addEventListener('click', function() {
+    const form = document.getElementById('form-budget-adjustments');
+    const formData = new FormData(form);
+    
+    // Build budget adjustments array
+    const crops = formData.getAll('crop_name[]');
+    const ages = formData.getAll('age[]');
+    const stages = formData.getAll('stage[]');
+    const beds = formData.getAll('beds[]');
+    const reasons = formData.getAll('reason[]');
+    
+    const adjustments = [];
+    for (let i = 0; i < crops.length; i++) {
+        if (crops[i] && ages[i] && stages[i] && beds[i]) {
+            adjustments.push({
+                crop_name: crops[i],
+                age: parseFloat(ages[i]),
+                stage: stages[i],
+                beds: parseFloat(beds[i]),
+                reason: reasons[i] || ''
+            });
+        }
+    }
+    
+    if (adjustments.length === 0) {
+        alert('Agrega al menos una fila de presupuesto antes de recalcular.');
+        return;
+    }
+    
+    // Send to backend
+    fetch('{{ url_for("orden_compra.recalculate_with_budget") }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            week: '{{ selected_week }}',
+            rotation_id: {{ rotation.id if rotation else 'null' }},
+            adjustments: adjustments
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('✓ Pedido recalculado con camas de presupuesto');
+            window.location.reload();
+        } else {
+            alert('Error al recalcular: ' + (data.error || 'Error desconocido'));
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error al recalcular el pedido');
+    });
+});
+
+// Approve order
+document.getElementById('btn-approve-order')?.addEventListener('click', function() {
+    if (!confirm('¿Confirmar aprobación de esta orden de compra?')) return;
+    
+    fetch('{{ url_for("orden_compra.approve_order") }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            week: '{{ selected_week }}',
+            rotation_id: {{ rotation.id if rotation else 'null' }}
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('✓ Orden de compra APROBADA exitosamente');
+            window.location.reload();
+        } else {
+            alert('Error al aprobar: ' + (data.error || 'Error desconocido'));
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error al aprobar la orden');
+    });
+});
+
+// Load existing budget adjustments
+function loadExistingBudgetAdjustments() {
+    {% if requisition and requisition.budget_adjustments_json %}
+    try {
+        const existingAdjustments = {{ requisition.budget_adjustments_json|safe }};
+        if (Array.isArray(existingAdjustments)) {
+            existingAdjustments.forEach(adj => {
+                budgetRowCounter++;
+                const tbody = document.getElementById('budget-rows');
+                const row = document.createElement('tr');
+                row.id = `budget-row-${budgetRowCounter}`;
+                row.innerHTML = `
+                    <td>
+                        <input type="text" class="form-control form-control-sm" name="crop_name[]" 
+                               value="${adj.crop_name || ''}" list="crop-list-${budgetRowCounter}" required>
+                        <datalist id="crop-list-${budgetRowCounter}">
+                            ${availableCrops.map(c => `<option value="${c.name}">`).join('')}
+                        </datalist>
+                    </td>
+                    <td>
+                        <input type="number" class="form-control form-control-sm" name="age[]" 
+                               value="${adj.age || ''}" min="0" max="200" required>
+                    </td>
+                    <td>
+                        <select class="form-select form-select-sm" name="stage[]" required>
+                            <option value="">Seleccionar...</option>
+                            <option value="VEGETATIVO" ${adj.stage === 'VEGETATIVO' ? 'selected' : ''}>VEGETATIVO</option>
+                            <option value="PRODUCTIVO" ${adj.stage === 'PRODUCTIVO' ? 'selected' : ''}>PRODUCTIVO</option>
+                        </select>
+                    </td>
+                    <td>
+                        <input type="number" class="form-control form-control-sm" name="beds[]" 
+                               value="${adj.beds || ''}" min="0.1" step="0.1" required>
+                    </td>
+                    <td>
+                        <input type="text" class="form-control form-control-sm" name="reason[]" 
+                               value="${adj.reason || ''}" placeholder="Ej: Siembras semana 33">
+                    </td>
+                    <td class="text-center">
+                        <button type="button" class="btn btn-sm btn-danger" onclick="removeBudgetRow(${budgetRowCounter})">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+    } catch (e) {
+        console.error('Error loading budget adjustments:', e);
+    }
+    {% endif %}
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+    loadExistingBudgetAdjustments();
+});
+</script>
+{% endblock %}

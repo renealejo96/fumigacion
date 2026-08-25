@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+
+{% block title %}Previsualización de Importación | AgroFumigación{% endblock %}
+{% block page_header %}Importador &bull; Previsualización y Validación de Datos{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+    <a href="{{ url_for('importador.index') }}" class="text-decoration-none text-muted small">
+        <i class="fa-solid fa-arrow-left me-1"></i> Cancelar y volver al importador
+    </a>
+</div>
+
+<div class="card shadow-sm mb-4 border-top border-4 border-primary">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
+        <div>
+            <h5 class="fw-bold mb-0 text-primary">
+                <i class="fa-solid fa-file-excel me-2"></i>Previsualización de Archivo: {{ filename }}
+            </h5>
+            <div class="text-muted small">Tipo: <strong>{{ file_type }}</strong> &bull; Modo: <strong>{{ mode }}</strong></div>
+        </div>
+        <div>
+            <form action="{{ url_for('importador.upload') }}" method="POST">
+                <input type="hidden" name="file_type" value="{{ file_type }}">
+                <input type="hidden" name="mode" value="{{ mode }}">
+                <input type="hidden" name="action_type" value="commit">
+                <!-- If it's preview, the file is already uploaded, re-commit -->
+            </form>
+            <a href="{{ url_for('importador.index') }}" class="btn btn-outline-secondary btn-sm me-2">Cancelar</a>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="alert alert-info py-2 small mb-3">
+            <i class="fa-solid fa-circle-info me-1"></i>
+            Se encontraron <strong>{{ res.total_rows }}</strong> registros válidos en la hoja <code>{{ res.sheet_name }}</code>.
+            {% if res.summary %}
+            &bull; Camas Estándar Totales: <strong>{{ res.summary.total_standard_beds }}</strong>
+            {% endif %}
+        </div>
+
+        <h6 class="fw-bold mb-2">Primeras 15 filas detectadas con encabezados normalizados:</h6>
+        <div class="table-responsive" style="max-height: 400px;">
+            <table class="table table-sm table-bordered table-striped small mb-0">
+                <thead class="table-light sticky-top">
+                    <tr>
+                        {% if file_type == 'PRODUCTOS_DOSIS' %}
+                        <th>Código</th>
+                        <th>Nombre Comercial</th>
+                        <th>UM</th>
+                        <th>Dosis Fumi</th>
+                        <th>Dosis Drench</th>
+                        <th>Plaga</th>
+                        <th>Ingrediente Activo</th>
+                        {% elif file_type == 'LITRAJES' %}
+                        <th>Cultivo</th>
+                        <th>Edad (sem)</th>
+                        <th>Litros por Cama</th>
+                        {% elif file_type == 'ESTADO_CULTIVO' %}
+                        <th>Bloque</th>
+                        <th># Cama</th>
+                        <th>Sufijo</th>
+                        <th>Cultivo Maestro</th>
+                        <th>Producto</th>
+                        <th>Variedad</th>
+                        <th>Cama Estándar</th>
+                        <th>Zona</th>
+                        <th>Edad Real</th>
+                        {% endif %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in res.preview %}
+                    <tr>
+                        {% if file_type == 'PRODUCTOS_DOSIS' %}
+                        <td class="fw-bold">{{ row.code }}</td>
+                        <td>{{ row.commercial_name }}</td>
+                        <td>{{ row.unit }}</td>
+                        <td>{{ row.dose_fumigation or '-' }}</td>
+                        <td>{{ row.dose_drench or '-' }}</td>
+                        <td>{{ row.pest }}</td>
+                        <td>{{ row.active_ingredient }}</td>
+                        {% elif file_type == 'LITRAJES' %}
+                        <td class="fw-bold">{{ row.crop_name }}</td>
+                        <td>{{ row.age }}</td>
+                        <td class="fw-bold text-primary">{{ row.liters_per_bed }}</td>
+                        {% elif file_type == 'ESTADO_CULTIVO' %}
+                        <td class="fw-bold">{{ row.block_full }}</td>
+                        <td>{{ row.bed_num }}</td>
+                        <td><span class="badge bg-light text-dark border">{{ row.suffix }}</span></td>
+                        <td>{{ row.crop_master }}</td>
+                        <td>{{ row.product_name }}</td>
+                        <td>{{ row.variety }}</td>
+                        <td>{{ row.standard_bed }}</td>
+                        <td>{{ row.zone }}</td>
+                        <td class="fw-bold">{{ row.real_age if row.real_age is not none else '-' }}</td>
+                        {% endif %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

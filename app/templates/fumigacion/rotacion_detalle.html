@@ -1,0 +1,1494 @@
+{% extends "base.html" %}
+
+{% block title %}Rotación Semana {{ rotation.week }} (v{{ rotation.version }}) | AgroFumigación{% endblock %}
+{% block page_header %}Fumigación &bull; Plan Semanal {{ rotation.week }} (v{{ rotation.version }}){% endblock %}
+
+{% block extra_css %}
+<style>
+.step-nav-tab {
+    font-size: 0.875rem;
+    font-weight: 600;
+    padding: 10px 10px !important;
+}
+.step-nav-tab.active {
+    border-bottom: 3px solid #16a34a !important;
+    color: #16a34a !important;
+    background-color: #f0fdf4 !important;
+}
+.review-clean-table th {
+    background-color: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    font-size: 0.725rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    padding: 3px 2px !important;
+    text-align: center;
+}
+.review-clean-table td {
+    border: 1px solid #e2e8f0;
+    padding: 1px 2px !important;
+    vertical-align: middle;
+    font-size: 0.775rem !important;
+}
+.review-clean-table .form-control, .review-clean-table .form-select {
+    padding: 1px 3px !important;
+    font-size: 0.775rem !important;
+    height: 22px !important;
+    min-height: 22px !important;
+    line-height: 1.2 !important;
+    border-radius: 3px !important;
+}
+.row-state-veg {
+    background-color: #ffffff;
+}
+.row-state-prod {
+    background-color: #f8fafc;
+}
+.row-state-extra {
+    background-color: #fff1f2;
+}
+.row-mix-custom {
+    background-color: #fffbeb !important;
+}
+.prod-matrix-box {
+    min-height: 32px;
+    background-color: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 4px;
+    padding: 2px 4px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+    <a href="{{ url_for('fumigacion.rotaciones_index') }}" class="text-decoration-none text-muted small">
+        <i class="fa-solid fa-arrow-left me-1"></i> Volver al listado de rotaciones
+    </a>
+</div>
+
+<!-- Header Card -->
+<div class="card mb-4 shadow-sm border-start border-4 {% if rotation.status == 'APROBADA' %}border-success{% else %}border-warning{% endif %}">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+            <div>
+                <div class="d-flex align-items-center gap-2 mb-1">
+                    <h3 class="fw-bold text-dark mb-0 font-monospace">
+                        <i class="fa-solid fa-calendar-check text-success me-2"></i>SEMANA {{ rotation.week }}
+                    </h3>
+                    <span class="badge bg-light text-dark border font-monospace fs-6">Versión {{ rotation.version }}</span>
+                    {% if rotation.status == 'APROBADA' %}
+                    <span class="badge bg-success fs-6" title="Rotación oficial aprobada y enviada a campo"><i class="fa-solid fa-circle-check me-1"></i> APROBADA (Vigente)</span>
+                    {% elif rotation.status == 'BORRADOR' %}
+                    <span class="badge bg-warning text-dark fs-6" title="Rotación en fase de ajuste y calibración"><i class="fa-solid fa-pen-ruler me-1"></i> BORRADOR (En planificación)</span>
+                    {% elif rotation.status == 'ANULADA' %}
+                    <span class="badge bg-secondary fs-6" title="Rotación reemplazada por una nueva versión"><i class="fa-solid fa-ban me-1"></i> ANULADA</span>
+                    {% endif %}
+                </div>
+                <h5 class="text-secondary fw-normal mb-2">{{ rotation.title or ('Planificación de Fumigación - Semana ' ~ rotation.week) }}</h5>
+                <div class="text-muted small">
+                    <span class="me-3"><i class="fa-regular fa-user me-1"></i> Responsable: <strong>{{ rotation.created_by }}</strong></span>
+                    <span class="me-3"><i class="fa-regular fa-clock me-1"></i> Creado: {{ rotation.created_at|format_local_datetime }}</span>
+                    {% if rotation.approved_at %}
+                    <span class="me-3 text-success"><i class="fa-solid fa-stamp me-1"></i> Aprobado por: <strong>{{ rotation.approved_by }}</strong> ({{ rotation.approved_at|format_local_datetime }})</span>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="d-flex gap-2 flex-wrap">
+                <a href="{{ url_for('fumigacion.ver_salidas', rotation_id=rotation.id) }}" class="btn btn-info btn-sm fw-semibold text-white">
+                    <i class="fa-solid fa-dolly me-1"></i> Ver Salidas de Productos
+                </a>
+                <a href="{{ url_for('fumigacion.rotacion_editar', rotation_id=rotation.id) }}" class="btn btn-outline-primary btn-sm fw-semibold">
+                    <i class="fa-solid fa-pen-to-square me-1"></i> Editar Matriz & Productos
+                </a>
+                {% if rotation.status != 'APROBADA' %}
+                <form action="{{ url_for('fumigacion.rotacion_aprobar', rotation_id=rotation.id) }}" method="POST" class="d-inline">
+                    <button type="submit" class="btn btn-success btn-sm fw-bold shadow-sm" onclick="return confirm('¿Aprobar esta versión de rotación como la oficial para la semana {{ rotation.week }}?');">
+                        <i class="fa-solid fa-circle-check me-1"></i> Aprobar Rotación
+                    </button>
+                </form>
+                {% else %}
+                <form action="{{ url_for('fumigacion.rotacion_desaprobar', rotation_id=rotation.id) }}" method="POST" class="d-inline">
+                    <button type="submit" class="btn btn-outline-warning btn-sm fw-bold shadow-sm" onclick="return confirm('¿Desaprobar esta rotación y devolverla a BORRADOR para poder editar la matriz y productos?');" title="Volver al modo borrador y reabrir el editor Drag and Drop">
+                        <i class="fa-solid fa-rotate-left me-1"></i> Desaprobar (Pasar a Borrador)
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+
+        {% if rotation.notes %}
+        <div class="mt-3 p-2 bg-light rounded border text-muted small">
+            <strong><i class="fa-regular fa-comment-dots me-1"></i> Observaciones:</strong> {{ rotation.notes }}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Sequential Navigation Tabs -->
+<ul class="nav nav-tabs nav-fill mb-4 shadow-sm bg-white rounded-top" id="mainWorkflowTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active step-nav-tab text-dark" id="tab-paso1" data-bs-toggle="tab" data-bs-target="#content-paso1" type="button" role="tab">
+            <span class="badge bg-warning text-dark me-1">1</span> Matriz de Rotación & Productos (Pedido a 15 Días)
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link step-nav-tab text-success" id="tab-paso2" data-bs-toggle="tab" data-bs-target="#content-paso2" type="button" role="tab">
+            <span class="badge bg-success me-1">2</span> Revisión & Calibración de Camas
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link step-nav-tab text-primary" id="tab-paso3" data-bs-toggle="tab" data-bs-target="#content-paso3" type="button" role="tab">
+            <span class="badge bg-primary me-1">3</span> Requisición a 15 Días & Comparativa Real
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link step-nav-tab text-dark" id="tab-paso4" data-bs-toggle="tab" data-bs-target="#content-paso4" type="button" role="tab">
+            <span class="badge bg-dark me-1">4</span> Órdenes Oficiales para Impresión ({{ orders|length }})
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content" id="mainWorkflowTabsContent">
+
+    <!-- ==================== PASO 1: MATRIZ DE ROTACIÓN & PRODUCTOS (EXCEL STYLE) ==================== -->
+    <div class="tab-pane fade show active" id="content-paso1" role="tabpanel">
+        <div class="mb-3">
+            <h5 class="fw-bold text-dark mb-0"><i class="fa-solid fa-table-cells text-warning me-2"></i>Matriz de Asignación de Agroquímicos por Vuelta</h5>
+        </div>
+
+        <!-- Visual Table of Products Assigned per Crop / Stage / Vuelta -->
+        <div class="card shadow-sm mb-4">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-bordered align-middle mb-0" style="font-size: 0.85rem;">
+                        <thead class="table-light text-center">
+                            <tr>
+                                <th style="width: 110px;">Semana</th>
+                                <th style="width: 140px;">Cultivo</th>
+                                <th style="width: 140px;">Estado</th>
+                                {% for r in rotation.rounds %}
+                                <th style="min-width: 220px;">
+                                    <div class="fw-bold">{{ r.name }}</div>
+                                    <div class="text-muted small fw-normal">{{ r.scheduled_day }}</div>
+                                </th>
+                                {% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for c in active_crops %}
+                            {% for stage in ['VEGETATIVO', 'PRODUCTIVO'] %}
+                            <tr>
+                                <td class="text-center font-monospace fw-bold text-primary">{{ rotation.week }}</td>
+                                <td class="fw-bold">{{ c.name }}</td>
+                                <td>
+                                    <span class="badge {% if stage == 'VEGETATIVO' %}bg-success-subtle text-success border border-success{% else %}bg-primary-subtle text-primary border border-primary{% endif %}">
+                                        {{ stage }}
+                                    </span>
+                                </td>
+                                {% for r in rotation.rounds %}
+                                <td>
+                                    <div class="prod-matrix-box">
+                                        {% set cell_items = [] %}
+                                        {% for it in r.items %}
+                                            {% if it.crop_name == c.name and it.phenological_stage == stage %}
+                                                <span class="badge bg-light text-dark border p-1 d-inline-flex align-items-center gap-1" title="{{ it.product.commercial_name if it.product else '' }} (Dosis: {{ it.dose_applied }} {{ it.dose_unit }}/L)">
+                                                    <strong class="text-primary">{{ it.product.code if it.product else '' }}</strong>
+                                                    <span class="text-muted small">({{ it.dose_applied }} {{ it.dose_unit }})</span>
+                                                </span>
+                                            {% endif %}
+                                        {% endfor %}
+                                    </div>
+                                </td>
+                                {% endfor %}
+                            </tr>
+                            {% endfor %}
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Consolidated Summary Cards for Each Vuelta (Estimated Baseline for Purchase Plan) -->
+        <h6 class="fw-bold text-muted text-uppercase mb-3"><i class="fa-solid fa-boxes-stacked me-1"></i> Resumen Estimado de Litros y Requerimiento de Mezcla por Vuelta (Plan de Compra 15 Días):</h6>
+        <div class="row g-4 mb-4">
+            {% for item in rounds_base_calculated %}
+            {% set r = item.round %}
+            {% set calc = item.calc %}
+            <div class="col-lg-6">
+                <div class="card h-100 shadow-sm border-top border-4 border-success">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center py-2">
+                        <div>
+                            <h6 class="fw-bold text-dark mb-0">{{ r.name }} &bull; {{ r.scheduled_day }}</h6>
+                            <span class="text-muted small">Litros Totales de Aplicación:</span>
+                        </div>
+                        <span class="badge bg-success fs-6">{{ calc.totals.total_liters|format_number(1) }} L</span>
+                    </div>
+                    <div class="card-body p-2">
+                        {% if calc.product_summaries %}
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered align-middle mb-0 small">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Código</th>
+                                        <th>Nombre Comercial</th>
+                                        <th>Dosis</th>
+                                        <th class="text-end">Cantidad Total</th>
+                                        <th>Plaga / Blanco</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for p in calc.product_summaries %}
+                                    <tr>
+                                        <td class="fw-bold text-primary">{{ p.product_code }}</td>
+                                        <td>{{ p.commercial_name }}</td>
+                                        <td>{{ p.dose }} {{ p.dose_unit }}/L</td>
+                                        <td class="text-end fw-bold text-success">{{ p.total_required_quantity|format_product(p.dose_unit) }} {{ p.dose_unit }}</td>
+                                        <td class="small text-muted">{{ p.pest or '-' }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <div class="text-center py-2 text-muted small">No hay agroquímicos asignados a esta vuelta.</div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+
+    <!-- ==================== PASO 2: REVISIÓN Y CALIBRACIÓN DE CAMAS (TABLA LIMPIA) ==================== -->
+    <div class="tab-pane fade" id="content-paso2" role="tabpanel">
+        <div class="card mb-3 shadow-sm bg-light border">
+            <div class="card-body py-2">
+                <div class="row g-2 align-items-center">
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold mb-0"><i class="fa-solid fa-spa text-success me-1"></i> Filtrar Variedad / Cultivo:</label>
+                        <select id="filter-review-crop" class="form-select form-select-sm">
+                            <option value="all">-- Todas las Variedades --</option>
+                            {% for c in active_crops %}
+                            <option value="{{ c.name }}">{{ c.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold mb-0"><i class="fa-solid fa-magnifying-glass text-secondary me-1"></i> Buscar Bloque:</label>
+                        <input type="text" id="filter-review-block" class="form-control form-control-sm" placeholder="ej. BL 15, BL 71...">
+                    </div>
+                    <div class="col-md-6 text-end pt-3 d-flex justify-content-end align-items-center gap-2">
+                        <button type="button" class="btn btn-danger btn-sm fw-bold shadow-sm" id="btn-delete-selected-segments" style="display: none;">
+                            <i class="fa-solid fa-trash-can me-1"></i> Eliminar Seleccionados (<span id="selected-segments-count">0</span>)
+                        </button>
+                        <button type="button" class="btn btn-outline-danger btn-sm fw-semibold" id="btn-add-siembra-poda">
+                            <i class="fa-solid fa-plus me-1"></i> + Camas Siembra / Poda
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm fw-semibold" id="btn-save-draft-review" title="Guardar cambios de la tabla como borrador de trabajo">
+                            <i class="fa-solid fa-floppy-disk me-1"></i> Guardar Borrador
+                        </button>
+                        <button type="button" class="btn btn-primary btn-sm fw-bold shadow-sm" id="btn-open-assign-modal" title="Asignar y aplicar esta configuración de camas a una vuelta">
+                            <i class="fa-solid fa-calendar-check me-1"></i> Asignar a Vuelta
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Banner de alerta si hay bloques con productos modificados -->
+        <div class="alert alert-warning py-1 px-3 small d-flex justify-content-between align-items-center mb-2" id="alert-modified-blocks" style="display: none !important;">
+            <div>
+                <i class="fa-solid fa-triangle-exclamation text-warning me-1"></i>
+                Hay <strong><span id="count-modified-blocks">0</span> bloques</strong> con productos modificados o quitados que difieren de la fórmula original de rotación.
+            </div>
+            <span class="badge bg-warning text-dark border">Mezcla Personalizada</span>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center mb-2 px-1">
+            <div class="text-muted small" style="font-size: 0.78rem;">
+                <i class="fa-solid fa-circle-info me-1 text-primary"></i>
+                <strong>Tabla de Calibración Ordenada:</strong> Bloques ordenados de corrido por <strong>Zona &bull; Bloque &bull; Sufijo &bull; Secuencia de Camas (1 a N)</strong>. Clic en <i class="fa-solid fa-flask text-primary"></i> para editar o quitar productos de un bloque.
+            </div>
+            <span class="badge bg-white text-dark border" id="visible-rows-count">Mostrando filas</span>
+        </div>
+
+        <!-- Clean Review Table Ultra Compact -->
+        <div class="card shadow-sm mb-4">
+            <div class="card-body p-0">
+                <div class="table-responsive" style="max-height: 620px;">
+                    <table class="table table-hover align-middle mb-0 review-clean-table table-compact-clean" id="table-clean-review">
+                        <thead class="sticky-top">
+                            <tr>
+                                <th style="width: 34px;" class="text-center">
+                                    <input type="checkbox" id="cb-select-all-segments" class="form-check-input" title="Seleccionar/Deseleccionar todos los visibles">
+                                </th>
+                                <th style="width: 110px;">Zona</th>
+                                <th style="width: 70px;">Bloque</th>
+                                <th style="width: 40px;" class="text-center">Suf.</th>
+                                <th style="width: 120px;">Variedad</th>
+                                <th style="width: 90px;" class="text-center">Edad</th>
+                                <th style="width: 95px;" class="text-center">Camas (Ini-Fin)</th>
+                                <th style="width: 70px;" class="text-end">Camas Std</th>
+                                <th style="width: 65px;" class="text-end">L/Cama</th>
+                                <th style="width: 100px;">Estado</th>
+                                <th style="width: 80px;" class="text-end">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="clean-review-tbody">
+                            {% if rounds_calculated and rounds_calculated[0] %}
+                            {% set r = rounds_calculated[0].round %}
+                            {% set calc = rounds_calculated[0].calc %}
+                            {% for s in calc.segments %}
+                            <tr class="clean-seg-row {% if s.phenological_stage == 'VEGETATIVO' %}row-state-veg{% elif s.phenological_stage == 'PRODUCTIVO' %}row-state-prod{% else %}row-state-extra{% endif %}"
+                                data-crop="{{ s.crop_name }}"
+                                data-variety="{{ s.variety }}"
+                                data-zone="{{ s.zone }}"
+                                data-block="{{ s.block_name }}"
+                                data-suffix="{{ s.suffix }}"
+                                data-stage="{{ s.phenological_stage }}">
+                                
+                                <td class="text-center">
+                                    <input type="checkbox" class="form-check-input seg-row-cb">
+                                </td>
+                                <td class="text-center font-monospace">
+                                    <input type="text" class="form-control form-control-sm text-center seg-zone py-0" value="{{ s.zone or '' }}" style="width: 105px;">
+                                </td>
+                                <td class="text-center fw-bold">
+                                    <input type="text" class="form-control form-control-sm fw-bold text-center seg-block py-0" value="{{ s.block_name }}" style="width: 65px;">
+                                </td>
+                                <td class="text-center fw-bold text-primary">
+                                    <input type="text" class="form-control form-control-sm text-center fw-bold seg-suffix py-0" value="{{ s.suffix }}" style="width: 38px;">
+                                </td>
+                                <td class="fw-semibold">
+                                    <span class="seg-crop-text">{{ s.crop_name }}</span>
+                                    <input type="hidden" class="seg-crop" value="{{ s.crop_name }}">
+                                    <input type="hidden" class="seg-variety" value="{{ s.variety }}">
+                                </td>
+                                <td class="text-center">
+                                    <input type="text" class="form-control form-control-sm text-center seg-age py-0" value="{{ s.real_age|format_age }}" style="width: 85px;" title="Edad en semanas (ej. 10 o 10,11,12)">
+                                </td>
+                                <td class="text-center">
+                                    <div class="d-flex align-items-center justify-content-center gap-1">
+                                        <input type="number" class="form-control form-control-sm text-center seg-bed-start py-0" value="{{ s.bed_start }}" style="width: 42px;" title="Cama Inicio">
+                                        <span>-</span>
+                                        <input type="number" class="form-control form-control-sm text-center seg-bed-end py-0" value="{{ s.bed_end }}" style="width: 42px;" title="Cama Fin">
+                                    </div>
+                                </td>
+                                <td class="text-end">
+                                    <input type="number" step="0.01" class="form-control form-control-sm text-end fw-bold seg-std-beds py-0" value="{{ s.standard_beds }}" style="width: 60px;">
+                                </td>
+                                <td class="text-end">
+                                    <input type="number" step="0.5" class="form-control form-control-sm text-end seg-liters-bed py-0" value="{{ s.liters_per_bed }}" style="width: 55px;">
+                                </td>
+                                <td class="text-center">
+                                    <select class="form-select form-select-sm seg-stage py-0" style="font-weight: 600;">
+                                        <option value="VEGETATIVO" {% if s.phenological_stage == 'VEGETATIVO' %}selected{% endif %}>VEGETATIVO</option>
+                                        <option value="PRODUCTIVO" {% if s.phenological_stage == 'PRODUCTIVO' %}selected{% endif %}>PRODUCTIVO</option>
+                                    </select>
+                                </td>
+                                <td class="text-end text-nowrap">
+                                    <input type="hidden" class="seg-products-json" value='{{ s.products|tojson if s.products else "[]" }}'>
+                                    <input type="hidden" class="seg-custom-mix" value='false'>
+                                    <button type="button" class="btn btn-outline-primary btn-sm py-0 px-1 me-1 btn-edit-block-mix" title="Editar mezcla / quitar productos para este bloque">
+                                        <i class="fa-solid fa-flask"></i>
+                                        <span class="badge-mix-indicator text-warning small ms-1" style="display:none;" title="Mezcla modificada (difiere de la rotación)"><i class="fa-solid fa-triangle-exclamation"></i></span>
+                                    </button>
+                                    <button type="button" class="btn btn-outline-danger btn-sm py-0 px-1 btn-delete-clean-row" title="Eliminar fila de este bloque">
+                                        <i class="fa-regular fa-trash-can"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- ==================== PASO 3: REQUISICIÓN A 15 DÍAS & COMPARATIVA REAL ==================== -->
+    <div class="tab-pane fade" id="content-paso3" role="tabpanel">
+        <div class="card mb-4 shadow-sm border-top border-4 border-primary">
+            <div class="card-body py-3">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <div>
+                        <h5 class="fw-bold text-dark mb-0">
+                            <i class="fa-solid fa-cart-flatbed text-primary me-2"></i>Requisición de Compra a 15 Días & Comparativa con Programa Final Validado
+                        </h5>
+                        <div class="text-muted small">Cálculo consolidado de compra vs requerimiento final actualizado (incluyendo aplicaciones adicionales y origen del producto).</div>
+                    </div>
+                    {% if requisition %}
+                    <a href="{{ url_for('fumigacion.requisicion_exportar_excel', requisition_id=requisition.id) }}" class="btn btn-success btn-sm fw-bold shadow-sm">
+                        <i class="fa-solid fa-file-excel me-1"></i> Exportar Requisición a Excel
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        {% if comp_data and comp_data.rows %}
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
+                <span class="fw-bold text-dark"><i class="fa-solid fa-scale-balanced me-2 text-primary"></i>Tabla Comparativa: Pedido Inicial (15 días) vs Ejecutado Real + Extras</span>
+                <span class="badge bg-primary-subtle text-primary fs-6">Litros Totales de Aplicación: {{ requisition.total_liters|format_number(1) }} L</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0 small">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Código Producto</th>
+                                <th>Nombre Comercial</th>
+                                <th style="width: 140px;">Origen del Producto</th>
+                                <th class="text-end">Comprado (15 Días)</th>
+                                <th class="text-end">Ejecutado Real</th>
+                                <th class="text-end">Aplicaciones Extras</th>
+                                <th class="text-end">Total Requerido</th>
+                                <th class="text-end">Diferencia (+/-)</th>
+                                <th>Unidad</th>
+                                <th>Estado de Abastecimiento</th>
+                                <th>Blanco / Plaga</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for r in comp_data.rows %}
+                            <tr>
+                                <td class="fw-bold font-monospace text-primary fs-6">{{ r.product_code }}</td>
+                                <td class="fw-semibold">{{ r.commercial_name }}</td>
+                                <td>
+                                    <span class="badge {{ r.origin_badge }}">{{ r.origin_label }}</span>
+                                    {% if r.extra_reasons_str %}
+                                    <div class="text-muted small mt-1" style="font-size: 0.725rem;" title="{{ r.extra_reasons_str }}">
+                                        <i class="fa-solid fa-tag me-1 text-danger"></i>{{ r.extra_reasons_str }}
+                                    </div>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end fw-semibold text-secondary">{{ r.quantity_forecast|format_product(r.unit) }}</td>
+                                <td class="text-end fw-bold text-dark">{{ r.quantity_orders|format_product(r.unit) }}</td>
+                                <td class="text-end fw-bold {% if r.quantity_extras > 0 %}text-danger{% else %}text-muted{% endif %}">
+                                    {{ r.quantity_extras|format_product(r.unit) }}
+                                </td>
+                                <td class="text-end fw-bold text-primary fs-6">{{ r.total_real|format_product(r.unit) }}</td>
+                                <td class="text-end fw-bold {% if r.difference > 0 %}text-danger{% elif r.difference < 0 %}text-info{% else %}text-success{% endif %}">
+                                    {% if r.difference > 0 %}+{% endif %}{{ r.difference|format_product(r.unit) }}
+                                </td>
+                                <td><span class="badge bg-light text-dark border">{{ r.unit }}</span></td>
+                                <td>
+                                    <span class="badge {{ r.badge_class }} border">
+                                        {{ r.status_label }}
+                                    </span>
+                                </td>
+                                <td class="text-muted small">{{ r.pest or '-' }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="text-center py-5 text-muted">No hay requisición calculada para esta rotación.</div>
+        {% endif %}
+    </div>
+
+
+    <!-- ==================== PASO 4: ÓRDENES OFICIALES PARA IMPRESIÓN ==================== -->
+    <div class="tab-pane fade" id="content-paso4" role="tabpanel">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="fw-bold text-dark mb-0"><i class="fa-solid fa-print text-success me-2"></i>Órdenes de Fumigación Generadas para Campo & Almacén</h5>
+            <div class="d-flex gap-2">
+                {% for item in rounds_calculated %}
+                {% set r = item.round %}
+                <form action="{{ url_for('fumigacion.generar_orden', round_id=r.id) }}" method="POST" class="d-inline">
+                    <button type="submit" class="btn btn-outline-success btn-sm fw-bold">
+                        <i class="fa-solid fa-stamp me-1"></i> Generar Orden {{ r.name }}
+                    </button>
+                </form>
+                {% endfor %}
+            </div>
+        </div>
+
+        {% if orders %}
+        <div class="row g-3">
+            {% for ord in orders %}
+            <div class="col-12">
+                <div class="card shadow-sm border-start border-4 border-success bg-white">
+                    <div class="card-body p-3">
+                        <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                            <div class="d-flex align-items-center gap-3">
+                                <div class="bg-success-subtle text-success p-3 rounded text-center" style="min-width: 60px;">
+                                    <i class="fa-solid fa-file-signature fs-4"></i>
+                                </div>
+                                <div>
+                                    <div class="d-flex align-items-center gap-2 mb-1">
+                                        <span class="badge bg-success font-monospace">{{ ord.status }}</span>
+                                        <span class="badge bg-light text-dark border font-monospace">{{ ord.order_number }}</span>
+                                    </div>
+                                    <h5 class="fw-bold text-dark mb-1 font-monospace">{{ ord.display_title }}</h5>
+                                    <div class="text-muted small">
+                                        <span class="me-3"><strong>Vuelta / Día:</strong> {{ ord.round_name }} &bull; {{ ord.scheduled_day }}</span>
+                                        <span class="me-3"><strong>Mezcla:</strong> <strong class="text-primary font-monospace">{{ ord.total_liters|format_number(1) }} L</strong></span>
+                                        <span class="me-3"><strong>Camas:</strong> {{ ord.total_standard_beds|format_number(2) }}</span>
+                                        <span><strong>Registros:</strong> {{ ord.details|length }}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="d-flex gap-2 flex-wrap align-items-center">
+                                <a href="{{ url_for('fumigacion.orden_detalle', order_id=ord.id) }}" class="btn btn-success btn-sm fw-bold shadow-sm">
+                                    <i class="fa-solid fa-print me-1 text-warning"></i> Imprimir / Ver Programa
+                                </a>
+                                <a href="{{ url_for('fumigacion.ver_salidas', rotation_id=rotation.id, order_id=ord.id) }}" class="btn btn-outline-info btn-sm fw-semibold" title="Ver Salidas de este Programa">
+                                    <i class="fa-solid fa-dolly me-1"></i> Ver Salidas
+                                </a>
+                                <a href="{{ url_for('fumigacion.orden_exportar_excel', order_id=ord.id) }}" class="btn btn-outline-primary btn-sm fw-semibold" title="Descargar Excel">
+                                    <i class="fa-solid fa-file-excel me-1"></i> Excel
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-center py-5 text-muted">
+            <i class="fa-regular fa-clipboard fs-1 text-secondary mb-3"></i>
+            <h5>Aún no se han generado órdenes de fumigación</h5>
+            <p class="small">Ajusta los bloques en el <strong>Paso 2</strong> y presiona <strong>Generar Orden</strong> para emitir la orden imprimible.</p>
+        </div>
+        {% endif %}
+    </div>
+
+</div>
+
+<!-- Modal Asignar Camas a Vuelta -->
+<div class="modal fade" id="modalAssignRound" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content shadow">
+            <div class="modal-header bg-primary text-white py-2">
+                <h6 class="modal-title fw-bold"><i class="fa-solid fa-calendar-check me-2"></i> Asignar Configuración de Camas a Vuelta</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small text-muted mb-3">
+                    Selecciona a qué vuelta deseas aplicar las camas, litrajes y mezclas calibradas actualmente en la tabla.
+                </p>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-dark">¿A qué vuelta deseas asignar esta configuración?:</label>
+                    <select id="modal-assign-round-select" class="form-select">
+                        {% for item in rounds_calculated %}
+                        <option value="{{ item.round.id }}">
+                            {{ item.round.name }} (Día Programado: {{ item.round.scheduled_day }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="alert alert-info py-2 px-3 small mb-0">
+                    <i class="fa-solid fa-circle-info me-1"></i> Al asignar, se recalculará automáticamente el consumo real para esta vuelta en el <strong>Paso 3 (Requisición y Comparativa Real)</strong>. Luego podrás seguir editando la tabla para asignar a la siguiente vuelta.
+                </div>
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary btn-sm fw-bold shadow-sm" id="btn-confirm-assign-round">
+                    <i class="fa-solid fa-check me-1"></i> Confirmar y Asignar a la Vuelta
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Editar Mezcla / Productos por Bloque -->
+<div class="modal fade" id="modalEditBlockProducts" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white py-2">
+                <h6 class="modal-title fw-bold" id="modal-eb-title-header">
+                    <i class="fa-solid fa-flask me-2"></i>Editar Agroquímicos para Bloque: <span id="modal-eb-title"></span>
+                </h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning py-1 px-3 small mb-2" id="modal-eb-alert-custom" style="display:none;">
+                    <i class="fa-solid fa-triangle-exclamation me-1"></i>
+                    <strong>Aviso:</strong> Este bloque tiene asignaciones que no coinciden con la fórmula original de la rotación (se retiró o modificó algún producto).
+                </div>
+
+                <div class="alert alert-info py-2 px-3 small mb-3">
+                    <i class="fa-solid fa-circle-info me-1"></i>
+                    Puedes <strong>quitar cualquier producto</strong> para este bloque (ej. por pH del agua, fitotoxicidad o calibración), cambiar la dosis o agregar otro agroquímico.
+                </div>
+                
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="fw-bold text-dark small mb-0"><i class="fa-solid fa-list-check me-1 text-primary"></i> Productos Actuales en la Mezcla de este Bloque:</h6>
+                    <button type="button" class="btn btn-outline-warning btn-sm py-0 px-2 fw-semibold" id="btn-modal-eb-restore" title="Restaurar los productos originales de rotación para este cultivo y estado">
+                        <i class="fa-solid fa-rotate-left me-1"></i> Restaurar Fórmula Original de Rotación
+                    </button>
+                </div>
+                <div class="table-responsive mb-3">
+                    <table class="table table-sm table-bordered align-middle mb-0" id="table-modal-eb-products">
+                        <thead class="table-light text-center small">
+                            <tr>
+                                <th style="width: 120px;">Código</th>
+                                <th>Nombre Comercial</th>
+                                <th style="width: 110px;">Dosis (/L)</th>
+                                <th style="width: 70px;">U.M</th>
+                                <th>Plaga / Blanco</th>
+                                <th style="width: 80px;">Quitar</th>
+                            </tr>
+                        </thead>
+                        <tbody id="modal-eb-tbody">
+                            <!-- Dynamic rows loaded via JS -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Add New Product to this Block -->
+                <div class="card bg-light border">
+                    <div class="card-body p-2">
+                        <span class="small fw-bold text-dark d-block mb-1"><i class="fa-solid fa-plus me-1 text-success"></i> Agregar otro agroquímico a este bloque:</span>
+                        <div class="row g-2 align-items-end">
+                            <div class="col-md-6">
+                                <select id="modal-eb-new-product" class="form-select form-select-sm">
+                                    <option value="">-- Seleccionar Agroquímico --</option>
+                                    {% for p in active_products %}
+                                    <option value="{{ p.id }}" data-code="{{ p.code }}" data-name="{{ p.commercial_name or p.code }}" data-unit="{{ p.unit or 'CC' }}" data-dose="{{ p.dose_fumigation or 1.0 }}" data-pest="{{ p.pest or '' }}" data-ia="{{ p.active_ingredient or '' }}" data-ct="{{ p.toxicological_category or '' }}">
+                                        {{ p.code }} - {{ p.commercial_name }} ({{ p.unit or 'CC' }})
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="input-group input-group-sm">
+                                    <input type="number" step="0.001" id="modal-eb-new-dose" class="form-control" placeholder="Dosis">
+                                    <span class="input-group-text" id="modal-eb-new-unit">CC</span>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <button type="button" class="btn btn-primary btn-sm w-100 fw-bold" id="btn-modal-eb-add-prod">
+                                    <i class="fa-solid fa-plus me-1"></i> Añadir
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success btn-sm fw-bold" id="btn-modal-eb-save">
+                    <i class="fa-solid fa-check me-1"></i> Aplicar Cambios al Bloque
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Add Camas Siembra / Poda Presupuestadas -->
+<div class="modal fade" id="modalSiembraPoda" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-light py-2">
+                <h6 class="modal-title fw-bold text-danger"><i class="fa-solid fa-plus me-1"></i> Aumentar Camas de Presupuesto Siembra / Poda</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-2">
+                    <div class="col-6">
+                        <label class="form-label small fw-semibold">Vuelta:</label>
+                        <select id="modal-sp-round" class="form-select form-select-sm">
+                            {% for item in rounds_calculated %}
+                            <option value="{{ item.round.id }}">{{ item.round.name }} ({{ item.round.scheduled_day }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label small fw-semibold">Bloque:</label>
+                        <input type="text" id="modal-sp-block" class="form-control form-control-sm fw-bold" placeholder="ej. BL  15" required list="block-datalist">
+                        <datalist id="block-datalist">
+                            {% for b_name, b_info in block_zone_map.items() %}
+                            <option value="{{ b_name }}">{{ b_name }} ({{ b_info.zone }})</option>
+                            {% endfor %}
+                        </datalist>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label small fw-semibold">Zona (Auto):</label>
+                        <input type="text" id="modal-sp-zone" class="form-control form-control-sm bg-light" placeholder="Auto-asignada" readonly>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label small fw-semibold">Sufijo:</label>
+                        <input type="text" id="modal-sp-suffix" class="form-control form-control-sm text-center fw-bold" value="A" required>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label small fw-semibold">Cultivo:</label>
+                        <select id="modal-sp-crop" class="form-select form-select-sm">
+                            {% for c in active_crops %}
+                            <option value="{{ c.name }}">{{ c.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label small fw-semibold">Estado:</label>
+                        <select id="modal-sp-stage" class="form-select form-select-sm">
+                            <option value="VEGETATIVO">VEGETATIVO</option>
+                            <option value="PRODUCTIVO">PRODUCTIVO</option>
+                        </select>
+                    </div>
+                    <div class="col-4">
+                        <label class="form-label small fw-semibold">Edad (sem):</label>
+                        <input type="number" id="modal-sp-age" class="form-control form-control-sm text-center" value="2">
+                    </div>
+                    <div class="col-4">
+                        <label class="form-label small fw-semibold">Cama Ini:</label>
+                        <input type="number" id="modal-sp-bed-start" class="form-control form-control-sm text-center" value="1">
+                    </div>
+                    <div class="col-4">
+                        <label class="form-label small fw-semibold">Cama Fin:</label>
+                        <input type="number" id="modal-sp-bed-end" class="form-control form-control-sm text-center" value="10">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label small fw-semibold">Camas Estándar:</label>
+                        <input type="number" step="0.01" id="modal-sp-std-beds" class="form-control form-control-sm text-end fw-bold" value="10.0">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label small fw-semibold">L/Cama:</label>
+                        <input type="number" step="0.5" id="modal-sp-liters-bed" class="form-control form-control-sm text-end" value="5.5">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-danger btn-sm fw-semibold" id="btn-confirm-add-siembra-poda">
+                    <i class="fa-solid fa-plus me-1"></i> Insertar Camas al Plan
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const BLOCK_ZONE_MAP = {{ block_zone_map|tojson }};
+const ACTIVE_PRODUCTS = [
+    {% for p in active_products %}
+    { 
+        id: {{ p.id }}, 
+        code: "{{ p.code }}", 
+        name: "{{ p.commercial_name or p.code }}", 
+        unit: "{{ p.unit or 'CC' }}", 
+        dose: {{ p.dose_fumigation or 1.0 }}, 
+        pest: "{{ p.pest or '' }}",
+        ia: "{{ p.active_ingredient or '' }}",
+        ct: "{{ p.toxicological_category or '' }}"
+    },
+    {% endfor %}
+];
+const ROTATION_FORMULAS_MAP = {{ rotation_formulas_map|tojson if rotation_formulas_map else "{}" }};
+
+let currentEditingRow = null;
+let currentBlockProducts = [];
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Restore active tab if saved or from hash
+    const savedTab = sessionStorage.getItem('active_workflow_tab');
+    if (savedTab) {
+        const triggerEl = document.getElementById(savedTab);
+        if (triggerEl) {
+            const tab = new bootstrap.Tab(triggerEl);
+            tab.show();
+        }
+        sessionStorage.removeItem('active_workflow_tab');
+    } else if (window.location.hash) {
+        const hashTab = document.querySelector(`[data-bs-target="${window.location.hash}"]`) || document.getElementById(window.location.hash.replace('#', ''));
+        if (hashTab) {
+            const tab = new bootstrap.Tab(hashTab);
+            tab.show();
+        }
+    }
+
+    document.querySelectorAll('.step-nav-tab').forEach(t => {
+        t.addEventListener('shown.bs.tab', function(e) {
+            sessionStorage.setItem('last_active_tab', e.target.id);
+        });
+    });
+
+    function normalizeCropName(name) {
+        if (!name) return '';
+        let n = name.toString().trim().toUpperCase();
+        n = n.replace(/Á/g, 'A').replace(/É/g, 'E').replace(/Í/g, 'I').replace(/Ó/g, 'O').replace(/Ú/g, 'U');
+        return n;
+    }
+
+    function getDefaultFormula(cropName, stage) {
+        const cropK = normalizeCropName(cropName);
+        const stageK = (stage || 'VEGETATIVO').toString().trim().toUpperCase();
+        const key = `${cropK}__${stageK}`;
+        return ROTATION_FORMULAS_MAP[key] || [];
+    }
+
+    function isMixModified(currentProds, defaultProds) {
+        if (!defaultProds || defaultProds.length === 0) {
+            return (currentProds && currentProds.length > 0);
+        }
+        if (!currentProds || currentProds.length === 0) {
+            return true;
+        }
+        if (currentProds.length !== defaultProds.length) {
+            return true;
+        }
+        for (let dp of defaultProds) {
+            const found = currentProds.find(cp => cp.product_code === dp.product_code);
+            if (!found) return true;
+            if (Math.abs(parseFloat(found.dose || 0) - parseFloat(dp.dose || 0)) > 0.0001) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function checkAllRowsMixStatus() {
+        let modifiedCount = 0;
+        document.querySelectorAll('#clean-review-tbody tr.clean-seg-row').forEach(tr => {
+            const isCustom = tr.querySelector('.seg-custom-mix')?.value === 'true';
+            const indicator = tr.querySelector('.badge-mix-indicator');
+            if (indicator) {
+                indicator.style.display = isCustom ? 'inline-block' : 'none';
+            }
+
+            if (isCustom) {
+                tr.classList.add('row-mix-custom');
+                modifiedCount++;
+            } else {
+                tr.classList.remove('row-mix-custom');
+            }
+        });
+
+        const alertBox = document.getElementById('alert-modified-blocks');
+        const countSpan = document.getElementById('count-modified-blocks');
+        if (alertBox && countSpan) {
+            countSpan.textContent = modifiedCount;
+            if (modifiedCount > 0) {
+                alertBox.style.setProperty('display', 'flex', 'important');
+            } else {
+                alertBox.style.setProperty('display', 'none', 'important');
+            }
+        }
+    }
+
+    function restoreFiltersFromStorage() {
+        const savedCrop = sessionStorage.getItem('fumigacion_filter_crop');
+        const savedBlock = sessionStorage.getItem('fumigacion_filter_block');
+        const cropSelect = document.getElementById('filter-review-crop');
+        const blockInput = document.getElementById('filter-review-block');
+
+        if (savedCrop && cropSelect) {
+            cropSelect.value = savedCrop;
+        }
+        if (savedBlock && blockInput) {
+            blockInput.value = savedBlock;
+        }
+    }
+
+    function updateBulkDeleteButton() {
+        const checkedBoxes = document.querySelectorAll('#clean-review-tbody tr.clean-seg-row:not([style*="display: none"]) .seg-row-cb:checked');
+        const count = checkedBoxes.length;
+        const btn = document.getElementById('btn-delete-selected-segments');
+        const countSpan = document.getElementById('selected-segments-count');
+        const masterCb = document.getElementById('cb-select-all-segments');
+
+        if (countSpan) countSpan.textContent = count;
+        if (btn) {
+            btn.style.display = (count > 0) ? 'inline-block' : 'none';
+        }
+
+        const visibleTotal = document.querySelectorAll('#clean-review-tbody tr.clean-seg-row:not([style*="display: none"]) .seg-row-cb').length;
+        if (masterCb) {
+            masterCb.checked = (visibleTotal > 0 && count === visibleTotal);
+            masterCb.indeterminate = (count > 0 && count < visibleTotal);
+        }
+    }
+
+    function applyCleanReviewFilters() {
+        const cropSelect = document.getElementById('filter-review-crop');
+        const blockInput = document.getElementById('filter-review-block');
+        const cropVal = cropSelect ? cropSelect.value : 'all';
+        const blockVal = blockInput ? blockInput.value.toLowerCase().trim() : '';
+
+        // Persist filter in sessionStorage
+        sessionStorage.setItem('fumigacion_filter_crop', cropVal);
+        sessionStorage.setItem('fumigacion_filter_block', blockVal);
+
+        let visibleCount = 0;
+        document.querySelectorAll('#clean-review-tbody tr.clean-seg-row').forEach(tr => {
+            const cName = tr.dataset.crop || (tr.querySelector('.seg-crop') ? tr.querySelector('.seg-crop').value : '');
+            const bInput = tr.querySelector('.seg-block');
+            const bName = bInput ? bInput.value.toLowerCase().trim() : '';
+
+            const matchCrop = (cropVal === 'all' || cName === cropVal);
+            const matchBlock = (blockVal === '' || bName.includes(blockVal));
+
+            if (matchCrop && matchBlock) {
+                tr.style.display = '';
+                visibleCount++;
+            } else {
+                tr.style.display = 'none';
+                const cb = tr.querySelector('.seg-row-cb');
+                if (cb && cb.checked) {
+                    cb.checked = false;
+                }
+            }
+        });
+
+        updateBulkDeleteButton();
+
+        const countBadge = document.getElementById('visible-rows-count');
+        if (countBadge) {
+            countBadge.textContent = `Mostrando ${visibleCount} filas`;
+        }
+    }
+
+    document.getElementById('filter-review-crop')?.addEventListener('change', applyCleanReviewFilters);
+    document.getElementById('filter-review-block')?.addEventListener('input', applyCleanReviewFilters);
+    
+    // Master checkbox select/deselect all visible
+    document.getElementById('cb-select-all-segments')?.addEventListener('change', function() {
+        const checked = this.checked;
+        document.querySelectorAll('#clean-review-tbody tr.clean-seg-row:not([style*="display: none"]) .seg-row-cb').forEach(cb => {
+            cb.checked = checked;
+        });
+        updateBulkDeleteButton();
+    });
+
+    // Bulk delete button click
+    document.getElementById('btn-delete-selected-segments')?.addEventListener('click', function() {
+        const checkedBoxes = document.querySelectorAll('#clean-review-tbody tr.clean-seg-row:not([style*="display: none"]) .seg-row-cb:checked');
+        const count = checkedBoxes.length;
+        if (count === 0) return;
+
+        if (confirm(`¿Estás seguro de eliminar los ${count} bloques seleccionados de la tabla?`)) {
+            checkedBoxes.forEach(cb => {
+                const tr = cb.closest('tr');
+                if (tr) tr.remove();
+            });
+            updateBulkDeleteButton();
+            applyCleanReviewFilters();
+            checkAllRowsMixStatus();
+        }
+    });
+
+    // Restore filters and initial check
+    restoreFiltersFromStorage();
+    checkAllRowsMixStatus();
+    applyCleanReviewFilters();
+
+    // Auto-populate zone when typing or picking block in Siembra/Poda modal
+    document.getElementById('modal-sp-block')?.addEventListener('input', function() {
+        const b = this.value.trim().toUpperCase();
+        if (BLOCK_ZONE_MAP[b]) {
+            document.getElementById('modal-sp-zone').value = BLOCK_ZONE_MAP[b].zone || 'ZONA1';
+            if (BLOCK_ZONE_MAP[b].crop) {
+                const cropSelect = document.getElementById('modal-sp-crop');
+                for (let i = 0; i < cropSelect.options.length; i++) {
+                    if (cropSelect.options[i].value.toUpperCase().includes(BLOCK_ZONE_MAP[b].crop.toUpperCase())) {
+                        cropSelect.selectedIndex = i;
+                        break;
+                    }
+                }
+            }
+        }
+    });
+
+    // Event delegation on table for Checkboxes, Delete, Edit Mix, and Stage change
+    document.getElementById('table-clean-review')?.addEventListener('change', function(e) {
+        if (e.target.classList.contains('seg-row-cb')) {
+            updateBulkDeleteButton();
+        }
+    });
+
+    document.getElementById('table-clean-review')?.addEventListener('click', function(e) {
+        // Delete row
+        if (e.target.closest('.btn-delete-clean-row')) {
+            const tr = e.target.closest('tr');
+            if (confirm('¿Eliminar esta fila de segmento del plan?')) {
+                tr.remove();
+                updateBulkDeleteButton();
+                applyCleanReviewFilters();
+                checkAllRowsMixStatus();
+            }
+            return;
+        }
+
+        // Edit mix for this block
+        if (e.target.closest('.btn-edit-block-mix')) {
+            const tr = e.target.closest('tr');
+            openEditBlockMixModal(tr);
+            return;
+        }
+    });
+
+    document.getElementById('table-clean-review')?.addEventListener('change', function(e) {
+        if (e.target.classList.contains('seg-stage')) {
+            const tr = e.target.closest('tr');
+            if (tr) {
+                tr.dataset.stage = e.target.value;
+                if (e.target.value === 'VEGETATIVO') {
+                    tr.classList.add('row-state-veg');
+                    tr.classList.remove('row-state-prod');
+                } else {
+                    tr.classList.add('row-state-prod');
+                    tr.classList.remove('row-state-veg');
+                }
+            }
+        }
+    });
+
+    // Open Edit Block Mix Modal
+    function openEditBlockMixModal(tr) {
+        currentEditingRow = tr;
+        const blockName = tr.querySelector('.seg-block')?.value || tr.dataset.block || 'BL';
+        const suffix = tr.querySelector('.seg-suffix')?.value || tr.dataset.suffix || 'A';
+        const cropName = tr.querySelector('.seg-crop')?.value || tr.dataset.crop || '';
+        const stage = tr.querySelector('.seg-stage')?.value || tr.dataset.stage || 'VEGETATIVO';
+
+        document.getElementById('modal-eb-title').textContent = `${blockName} (${suffix}) - ${cropName} [${stage}]`;
+
+        // Read products JSON
+        const jsonInput = tr.querySelector('.seg-products-json');
+        let products = [];
+        try {
+            products = JSON.parse(jsonInput.value || '[]');
+        } catch (e) {
+            products = [];
+        }
+
+        // If block has no products yet, load defaults for this crop & stage
+        if (!products || products.length === 0) {
+            const defs = getDefaultFormula(cropName, stage);
+            products = JSON.parse(JSON.stringify(defs));
+        }
+
+        currentBlockProducts = JSON.parse(JSON.stringify(products));
+
+        renderModalBlockProducts(cropName, stage);
+
+        const modal = new bootstrap.Modal(document.getElementById('modalEditBlockProducts'));
+        modal.show();
+    }
+
+    function renderModalBlockProducts(cropName, stage) {
+        const tbody = document.getElementById('modal-eb-tbody');
+        tbody.innerHTML = '';
+
+        const isCustom = currentEditingRow ? (currentEditingRow.querySelector('.seg-custom-mix')?.value === 'true') : false;
+
+        const alertMod = document.getElementById('modal-eb-alert-custom');
+        if (alertMod) {
+            alertMod.style.display = isCustom ? 'block' : 'none';
+        }
+
+        if (currentBlockProducts.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="6" class="text-center text-muted py-3">
+                        <i class="fa-solid fa-triangle-exclamation text-warning me-1"></i>
+                        No hay agroquímicos asignados a este bloque (mezcla vacía). Puedes restaurar la rotación original o añadir uno abajo.
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        currentBlockProducts.forEach((p, idx) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td class="text-center font-monospace fw-bold text-primary">${p.product_code || '-'}</td>
+                <td class="fw-semibold">${p.commercial_name || p.product_code || '-'}</td>
+                <td class="text-center">
+                    <input type="number" step="0.001" min="0" class="form-control form-control-sm text-end modal-eb-dose-input" data-idx="${idx}" value="${p.dose || 0}" style="width: 85px; display: inline-block;">
+                </td>
+                <td class="text-center small"><span class="badge bg-light text-dark border">${p.dose_unit || 'CC'}</span></td>
+                <td class="small text-muted">${p.pest || '-'}</td>
+                <td class="text-center">
+                    <button type="button" class="btn btn-outline-danger btn-sm py-0 px-2 btn-remove-block-prod" data-idx="${idx}" title="Quitar este producto de este bloque">
+                        <i class="fa-solid fa-xmark"></i> Quitar
+                    </button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        // Attach listeners for dose changes and remove buttons
+        tbody.querySelectorAll('.btn-remove-block-prod').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const idx = parseInt(this.dataset.idx);
+                currentBlockProducts.splice(idx, 1);
+                if (currentEditingRow) {
+                    currentEditingRow.querySelector('.seg-custom-mix').value = 'true';
+                }
+                renderModalBlockProducts(cropName, stage);
+            });
+        });
+
+        tbody.querySelectorAll('.modal-eb-dose-input').forEach(input => {
+            input.addEventListener('change', function() {
+                const idx = parseInt(this.dataset.idx);
+                const val = parseFloat(this.value) || 0;
+                if (currentBlockProducts[idx]) {
+                    currentBlockProducts[idx].dose = val;
+                }
+                if (currentEditingRow) {
+                    currentEditingRow.querySelector('.seg-custom-mix').value = 'true';
+                }
+                if (alertMod) alertMod.style.display = 'block';
+            });
+        });
+    }
+
+    // Restore original rotation formula for block
+    document.getElementById('btn-modal-eb-restore')?.addEventListener('click', function() {
+        if (!currentEditingRow) return;
+        const cropName = currentEditingRow.querySelector('.seg-crop')?.value || currentEditingRow.dataset.crop || '';
+        const stage = currentEditingRow.querySelector('.seg-stage')?.value || currentEditingRow.dataset.stage || 'VEGETATIVO';
+        
+        const defaultProds = getDefaultFormula(cropName, stage);
+        currentBlockProducts = JSON.parse(JSON.stringify(defaultProds));
+        currentEditingRow.querySelector('.seg-custom-mix').value = 'false';
+        renderModalBlockProducts(cropName, stage);
+    });
+
+    // Modal Add Product to Block
+    document.getElementById('modal-eb-new-product')?.addEventListener('change', function() {
+        const opt = this.selectedOptions[0];
+        if (opt && opt.dataset.dose) {
+            document.getElementById('modal-eb-new-dose').value = opt.dataset.dose;
+            document.getElementById('modal-eb-new-unit').textContent = opt.dataset.unit || 'CC';
+        }
+    });
+
+    document.getElementById('btn-modal-eb-add-prod')?.addEventListener('click', function() {
+        const select = document.getElementById('modal-eb-new-product');
+        const prodId = parseInt(select.value);
+        if (!prodId) {
+            alert('Por favor selecciona un agroquímico de la lista.');
+            return;
+        }
+
+        const doseInput = document.getElementById('modal-eb-new-dose');
+        const dose = parseFloat(doseInput.value) || 1.0;
+        const prodObj = ACTIVE_PRODUCTS.find(p => p.id === prodId);
+
+        if (!prodObj) return;
+
+        // Check if already in mix
+        const exists = currentBlockProducts.some(p => p.product_code === prodObj.code);
+        if (exists) {
+            alert(`El producto ${prodObj.code} ya está en la mezcla de este bloque.`);
+            return;
+        }
+
+        currentBlockProducts.push({
+            product_id: prodObj.id,
+            product_code: prodObj.code,
+            commercial_name: prodObj.name,
+            dose: dose,
+            dose_unit: prodObj.unit || 'CC',
+            pest: prodObj.pest || '',
+            active_ingredient: prodObj.ia || '',
+            toxicological_category: prodObj.ct || ''
+        });
+
+        if (currentEditingRow) {
+            currentEditingRow.querySelector('.seg-custom-mix').value = 'true';
+        }
+
+        select.value = '';
+        doseInput.value = '';
+        renderModalBlockProducts();
+    });
+
+    // Save Block Mix Modal Changes
+    document.getElementById('btn-modal-eb-save')?.addEventListener('click', function() {
+        if (!currentEditingRow) return;
+
+        // Read any pending dose input values from modal table
+        document.querySelectorAll('#modal-eb-tbody .modal-eb-dose-input').forEach(input => {
+            const idx = parseInt(input.dataset.idx);
+            const val = parseFloat(input.value) || 0;
+            if (currentBlockProducts[idx]) {
+                currentBlockProducts[idx].dose = val;
+            }
+        });
+
+        // Update hidden JSON in row
+        const jsonInput = currentEditingRow.querySelector('.seg-products-json');
+        if (jsonInput) {
+            jsonInput.value = JSON.stringify(currentBlockProducts);
+        }
+
+        bootstrap.Modal.getInstance(document.getElementById('modalEditBlockProducts')).hide();
+        currentEditingRow = null;
+        checkAllRowsMixStatus();
+    });
+
+    // Open Siembra / Poda Modal
+    document.getElementById('btn-add-siembra-poda')?.addEventListener('click', function() {
+        const modal = new bootstrap.Modal(document.getElementById('modalSiembraPoda'));
+        modal.show();
+    });
+
+    // Confirm Add Siembra / Poda Row
+    document.getElementById('btn-confirm-add-siembra-poda')?.addEventListener('click', function() {
+        const zone = document.getElementById('modal-sp-zone').value.trim() || 'ZONA1';
+        const block = document.getElementById('modal-sp-block').value.trim() || 'BL SIEMBRA';
+        const suffix = document.getElementById('modal-sp-suffix').value.trim() || 'A';
+        const crop = document.getElementById('modal-sp-crop').value;
+        const stage = document.getElementById('modal-sp-stage').value;
+        const age = document.getElementById('modal-sp-age').value.trim() || '2';
+        const bedStart = parseInt(document.getElementById('modal-sp-bed-start').value) || 1;
+        const bedEnd = parseInt(document.getElementById('modal-sp-bed-end').value) || 10;
+        const stdBeds = parseFloat(document.getElementById('modal-sp-std-beds').value) || 10.0;
+        const litBed = parseFloat(document.getElementById('modal-sp-liters-bed').value) || 5.5;
+
+        // Load standard rotation products for this crop & stage
+        const defaultProds = getDefaultFormula(crop, stage);
+
+        const newSeg = {
+            zone: zone,
+            block_name: block,
+            suffix: suffix,
+            crop_name: crop,
+            variety: crop,
+            phenological_stage: stage,
+            real_age: age,
+            bed_start: bedStart,
+            bed_end: bedEnd,
+            standard_beds: stdBeds,
+            liters_per_bed: litBed,
+            products: JSON.parse(JSON.stringify(defaultProds)),
+            is_custom_mix: false,
+            is_additional: true
+        };
+
+        addRowToCleanTable(newSeg, true);
+        bootstrap.Modal.getInstance(document.getElementById('modalSiembraPoda')).hide();
+        applyCleanReviewFilters();
+        checkAllRowsMixStatus();
+    });
+
+    // Helper function to add a row to the clean table
+    function addRowToCleanTable(seg, prepend = false) {
+        const tbody = document.getElementById('clean-review-tbody');
+        const tr = document.createElement('tr');
+        tr.className = `clean-seg-row ${seg.phenological_stage === 'VEGETATIVO' ? 'row-state-veg' : seg.phenological_stage === 'PRODUCTIVO' ? 'row-state-prod' : 'row-state-extra'}`;
+        tr.dataset.crop = seg.crop_name || '';
+        tr.dataset.variety = seg.variety || '';
+        tr.dataset.zone = seg.zone || '';
+        tr.dataset.block = seg.block_name || '';
+        tr.dataset.suffix = seg.suffix || '';
+        tr.dataset.stage = seg.phenological_stage || '';
+
+        const prods = Array.isArray(seg.products) ? seg.products : [];
+        const isCustom = seg.is_custom_mix ? 'true' : 'false';
+
+        tr.innerHTML = `
+            <td class="text-center">
+                <input type="checkbox" class="form-check-input seg-row-cb">
+            </td>
+            <td class="text-center font-monospace"><input type="text" class="form-control form-control-sm text-center seg-zone py-0" value="${seg.zone || ''}" style="width: 105px;"></td>
+            <td class="text-center fw-bold"><input type="text" class="form-control form-control-sm fw-bold text-center seg-block py-0" value="${seg.block_name || ''}" style="width: 65px;"></td>
+            <td class="text-center fw-bold text-primary"><input type="text" class="form-control form-control-sm text-center fw-bold seg-suffix py-0" value="${seg.suffix || 'A'}" style="width: 38px;"></td>
+            <td class="fw-semibold">
+                <span class="seg-crop-text">${seg.crop_name || ''}</span>
+                <input type="hidden" class="seg-crop" value="${seg.crop_name || ''}">
+                <input type="hidden" class="seg-variety" value="${seg.variety || ''}">
+            </td>
+            <td class="text-center"><input type="text" class="form-control form-control-sm text-center seg-age py-0" value="${seg.real_age || ''}" style="width: 85px;" title="Edad en semanas (ej. 10 o 10,11,12)"></td>
+            <td class="text-center">
+                <div class="d-flex gap-1 justify-content-center align-items-center">
+                    <input type="number" class="form-control form-control-sm text-center seg-bed-start py-0" value="${seg.bed_start || 1}" style="width: 42px;" title="Cama Inicio">
+                    <span>-</span>
+                    <input type="number" class="form-control form-control-sm text-center seg-bed-end py-0" value="${seg.bed_end || 1}" style="width: 42px;" title="Cama Fin">
+                </div>
+            </td>
+            <td class="text-end"><input type="number" step="0.01" class="form-control form-control-sm text-end fw-bold seg-std-beds py-0" value="${seg.standard_beds || 1}" style="width: 60px;"></td>
+            <td class="text-end"><input type="number" step="0.5" class="form-control form-control-sm text-end seg-liters-bed py-0" value="${seg.liters_per_bed || 0}" style="width: 55px;"></td>
+            <td class="text-center">
+                <select class="form-select form-select-sm seg-stage py-0" style="font-weight: 600;">
+                    <option value="VEGETATIVO" ${seg.phenological_stage === 'VEGETATIVO' ? 'selected' : ''}>VEGETATIVO</option>
+                    <option value="PRODUCTIVO" ${seg.phenological_stage === 'PRODUCTIVO' ? 'selected' : ''}>PRODUCTIVO</option>
+                </select>
+            </td>
+            <td class="text-end text-nowrap">
+                <input type="hidden" class="seg-products-json" value='${JSON.stringify(prods)}'>
+                <input type="hidden" class="seg-custom-mix" value='${isCustom}'>
+                <button type="button" class="btn btn-outline-primary btn-sm py-0 px-1 me-1 btn-edit-block-mix" title="Editar mezcla / quitar productos para este bloque">
+                    <i class="fa-solid fa-flask"></i>
+                    <span class="badge-mix-indicator text-warning small ms-1" style="display:${isCustom === 'true' ? 'inline-block' : 'none'};" title="Mezcla modificada (difiere de la rotación)"><i class="fa-solid fa-triangle-exclamation"></i></span>
+                </button>
+                <button type="button" class="btn btn-outline-danger btn-sm py-0 px-1 btn-delete-clean-row" title="Eliminar fila de este bloque">
+                    <i class="fa-regular fa-trash-can"></i>
+                </button>
+            </td>
+        `;
+
+        if (prepend) {
+            tbody.insertBefore(tr, tbody.firstChild);
+        } else {
+            tbody.appendChild(tr);
+        }
+    }
+
+    function collectCurrentSegments() {
+        const rows = document.querySelectorAll('#clean-review-tbody tr.clean-seg-row');
+        const allSegments = [];
+
+        rows.forEach(tr => {
+            const zone = tr.querySelector('.seg-zone')?.value.trim() || '';
+            const block = tr.querySelector('.seg-block')?.value.trim() || '';
+            const suffix = tr.querySelector('.seg-suffix')?.value.trim() || 'A';
+            const crop = tr.querySelector('.seg-crop')?.value.trim() || '';
+            const variety = tr.querySelector('.seg-variety')?.value.trim() || crop;
+            const stage = tr.querySelector('.seg-stage')?.value || 'VEGETATIVO';
+            const age = tr.querySelector('.seg-age')?.value.trim() || '';
+            const bedStart = parseInt(tr.querySelector('.seg-bed-start')?.value) || 1;
+            const bedEnd = parseInt(tr.querySelector('.seg-bed-end')?.value) || 1;
+            const stdBeds = parseFloat(tr.querySelector('.seg-std-beds')?.value) || 1.0;
+            const litBed = parseFloat(tr.querySelector('.seg-liters-bed')?.value) || 0;
+            const isCustomMix = tr.querySelector('.seg-custom-mix')?.value === 'true';
+
+            let prods = [];
+            try {
+                prods = JSON.parse(tr.querySelector('.seg-products-json')?.value || '[]');
+            } catch (e) {
+                prods = [];
+            }
+
+            allSegments.push({
+                zone: zone,
+                block_name: block,
+                suffix: suffix,
+                crop_name: crop,
+                variety: variety,
+                phenological_stage: stage,
+                real_age: age,
+                bed_start: bedStart,
+                bed_end: bedEnd,
+                standard_beds: stdBeds,
+                liters_per_bed: litBed,
+                products: prods,
+                is_custom_mix: isCustomMix,
+                is_additional: tr.classList.contains('row-state-extra')
+            });
+        });
+
+        return allSegments;
+    }
+
+    // Save Clean Review Draft (Working Table)
+    document.getElementById('btn-save-draft-review')?.addEventListener('click', function() {
+        const allSegments = collectCurrentSegments();
+        if (allSegments.length === 0) {
+            alert('No hay filas de segmentos para guardar.');
+            return;
+        }
+
+        const btn = this;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Guardando...';
+
+        fetch('{{ url_for("fumigacion.rotacion_guardar_revision", rotation_id=rotation.id) }}', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ segments: allSegments })
+        })
+        .then(res => res.json())
+        .then(data => {
+            btn.disabled = false;
+            if (data.success) {
+                btn.innerHTML = '<i class="fa-solid fa-circle-check me-1 text-success"></i> Borrador Guardado';
+                setTimeout(() => {
+                    btn.innerHTML = '<i class="fa-solid fa-floppy-disk me-1"></i> Guardar Borrador';
+                }, 2500);
+            } else {
+                alert('Error al guardar: ' + (data.error || 'Desconocido'));
+                btn.innerHTML = '<i class="fa-solid fa-floppy-disk me-1"></i> Guardar Borrador';
+            }
+        })
+        .catch(err => {
+            alert('Error de red al guardar borrador: ' + err);
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-floppy-disk me-1"></i> Guardar Borrador';
+        });
+    });
+
+    // Open Assign to Round Modal
+    document.getElementById('btn-open-assign-modal')?.addEventListener('click', function() {
+        const allSegments = collectCurrentSegments();
+        if (allSegments.length === 0) {
+            alert('No hay filas de segmentos para asignar.');
+            return;
+        }
+        const modal = new bootstrap.Modal(document.getElementById('modalAssignRound'));
+        modal.show();
+    });
+
+    // Confirm Assign to Round
+    document.getElementById('btn-confirm-assign-round')?.addEventListener('click', function() {
+        const roundSelect = document.getElementById('modal-assign-round-select');
+        const targetRoundId = parseInt(roundSelect.value);
+        if (!targetRoundId) {
+            alert('Por favor selecciona la vuelta objetivo.');
+            return;
+        }
+
+        const allSegments = collectCurrentSegments();
+        const btn = this;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Asignando y calculando...';
+
+        fetch('{{ url_for("fumigacion.rotacion_guardar_revision", rotation_id=rotation.id) }}', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                segments: allSegments,
+                target_round_id: targetRoundId
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-check me-1"></i> Confirmar y Asignar a la Vuelta';
+            const modalEl = document.getElementById('modalAssignRound');
+            if (modalEl) {
+                const modalInstance = bootstrap.Modal.getInstance(modalEl);
+                if (modalInstance) modalInstance.hide();
+            }
+
+            if (data.success) {
+                alert(data.message || 'Configuración asignada exitosamente a la vuelta seleccionada.');
+                // Refresh page to load updated Requisition and Orders directly
+                sessionStorage.setItem('active_workflow_tab', 'tab-paso3');
+                window.location.reload();
+            } else {
+                alert('Error al asignar: ' + (data.error || 'Error desconocido'));
+            }
+        })
+        .catch(err => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-check me-1"></i> Confirmar y Asignar a la Vuelta';
+            alert('Error de red al asignar a vuelta: ' + err);
+        });
+    });
+});
+</script>
+{% endblock %}

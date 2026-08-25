@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  # Base de Datos PostgreSQL
+  db:
+    image: postgres:16-alpine
+    container_name: fumigacion_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-fumigacion_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-fumigacion_secure_pass_2026}
+      POSTGRES_DB: ${DB_NAME:-fumigacion_db}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      # Puerto Host personalizado para evitar colisión con otras bases de datos (5495 -> 5432)
+      - "${DB_PORT:-5495}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-fumigacion_user} -d ${DB_NAME:-fumigacion_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - fumigacion_network
+
+  # Aplicación Web Flask + Gunicorn
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fumigacion_web
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - FLASK_APP=run.py
+      - FLASK_ENV=production
+      - SECRET_KEY=${SECRET_KEY:-fumigacion-super-secret-key-prod-2026}
+      - DATABASE_URL=postgresql://${DB_USER:-fumigacion_user}:${DB_PASSWORD:-fumigacion_secure_pass_2026}@db:5432/${DB_NAME:-fumigacion_db}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
+      - GUNICORN_WORKERS=${GUNICORN_WORKERS:-3}
+      - GUNICORN_THREADS=${GUNICORN_THREADS:-2}
+      - GUNICORN_TIMEOUT=${GUNICORN_TIMEOUT:-120}
+    ports:
+      # Puerto Host personalizado para la aplicación web (8095 -> 5000)
+      - "${APP_PORT:-8095}:5000"
+    volumes:
+      - ./uploads:/app/uploads
+    networks:
+      - fumigacion_network
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  fumigacion_network:
+    driver: bridge

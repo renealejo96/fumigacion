@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Gestión Agrícola | Florícola{% endblock %}</title>
+    <!-- Bootstrap 5.3 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- FontAwesome 6 -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+    <!-- Google Fonts Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    {% if current_user %}
+    <div class="d-flex" id="wrapper">
+        <!-- Sidebar -->
+        <aside id="sidebar-wrapper" class="bg-dark text-white">
+            <div class="sidebar-heading text-center py-4 primary-text fs-5 fw-bold text-uppercase border-bottom border-secondary">
+                <i class="fa-solid fa-leaf text-success me-2"></i> AgroFumigación
+                <div class="text-muted small text-capitalize fw-normal mt-1">Plataforma Florícola</div>
+            </div>
+
+            <div class="list-group list-group-flush my-3">
+                <a href="{{ url_for('dashboard') }}" class="list-group-item list-group-item-action bg-transparent text-white {% if request.path == '/' %}active-nav{% endif %}">
+                    <i class="fa-solid fa-gauge-high me-2 text-info"></i> Dashboard
+                </a>
+
+                <!-- Supermódulo 1: Fumigación & Control Operativo -->
+                {% if current_user.has_permission('fumigacion') or current_user.has_permission('ordenes_ver') or current_user.has_permission('salidas_ver') or current_user.has_permission('orden_compra') or current_user.has_permission('aplicaciones_extras') %}
+                <div class="sidebar-heading px-3 mt-3 mb-1 text-uppercase text-light opacity-50 small fw-bold">1. Fumigación</div>
+                
+                {% if current_user.has_permission('orden_compra') %}
+                <a href="{{ url_for('orden_compra.index') }}" class="list-group-item list-group-item-action bg-transparent text-white {% if '/orden-compra' in request.path %}active-nav{% endif %}">
+                    <i class="fa-solid fa-cart-shopping me-2 text-warning"></i> Orden de Compra
+                </a>
+                {% endif %}
+
+                {% if current_user.has_permission('fumigacion') %}
+                <a href="{{ url_for('fumigacion.rotaciones_index') }}" class="list-group-item list-group-item-action bg-transparent text-white {% if '/fumigacion/rotaciones' in request.path %}active-nav{% endif %}">
+                    <i class="fa-solid fa-rotate me-2 text-success"></i> Rotaciones Semanales
+                </a>
+                {% endif %}
+
+                {% if current_user.has_permission('ordenes_ver') %}
+                <a href="{{ url_for('fumigacion.ordenes_index') }}" class="list-group-item list-group-item-action bg-transparent text-white {% if 'fumigacion/ordenes' in request.path %}active-nav{% endif %}">
+                    <i class="fa-solid fa-clipboard-list me-2 text-primary"></i> Programas de Fumigación
+                </a>
+                {% endif %}
+
+                {% if current_user.has_permission('salidas_ver') and not current_user.has_permission('bodega') %}
+                <a href="{{ url_for('fumigacion.salidas_index') }}" class="list-group-item list-group-item-action bg-transparent text-white {% if 'fumigacion/salidas' in request.path %}active-nav{% endif %}">
+                    <i class="fa-solid fa-dolly me-2 text-info"></i> Salidas de Productos
+                </a>
+                {% endif %}
+
+                {% if current_user.has_permission('aplicaciones_extras') %}
+                <a href="{{ url_for('fumigacion.aplicaciones_adicionales') }}" class="list-group-item list-group-item-action bg-transparent text-white {% if 'aplicaciones-adicionales' in request.path %}active-nav{% endif %}">
+                    <i class="fa-solid fa-bullseye me-2 text-danger"></i> Aplicaciones Extras / Manchas
+                </a>
+                {% endif %}
+                {% endif %}
+
+                <!-- Supermódulo: Bodega & Almacén (Solo Órdenes Oficiales) -->
+                {% if current_user.has_permission('bodega') or current_user.has_permission('salidas_ver') %}
+                <div class="sidebar-heading px-3 mt-3 mb-1 text-uppercase text-light opacity-50 small fw-bold">Bodega & Almacén</div>
+                
+                <a href="{{ url_for('bodega.salidas') }}" class="list-group-item list-group-item-action bg-transparent text-white {% if '/bodega/salidas' in request.path or request.path == '/bodega/' or request.path == '/bodega' %}active-nav{% endif %}">
+                    <i class="fa-solid fa-warehouse me-2 text-warning"></i> Salidas de Bodega
+                </a>
+
+                <a href="{{ url_for('bodega.ordenes') }}" class="list-group-item list-group-item-action bg-transparent text-white {% if '/bodega/orden' in request.path %}active-nav{% endif %}">
+                    <i class="fa-solid fa-clipboard-check me-2 text-success"></i> Programas Oficiales
+                </a>
+                {% endif %}
+
+                <!-- Configuración y Catálogos -->
+                {% if current_user.has_permission('catalogos') or current_user.has_permission('importador') %}
+                <div class="sidebar-section-title px-3 pt-3 pb-1 text-uppercase small text-muted fw-bold">
+                    Catálogos y Datos
+                </div>
+                {% if current_user.has_permission('catalogos') %}
+                <a href="{{ url_for('productos.index') }}" class="list-group-item list-group-item-action bg-transparent text-white {% if 'productos' in request.path %}active-nav{% endif %}">
+                    <i class="fa-solid fa-flask-vial me-2 text-primary"></i> Productos y Dosis
+                </a>
+                <a href="{{ url_for('cultivos.index') }}" class="list-group-item list-group-item-action bg-transparent text-white {% if 'cultivos' in request.path %}active-nav{% endif %}">
+                    <i class="fa-solid fa-seedling me-2 text-success"></i> Cultivos y Rangos
+                </a>
+                <a href="{{ url_for('litrajes.index') }}" class="list-group-item list-group-item-action bg-transparent text-white {% if 'litrajes' in request.path %}active-nav{% endif %}">
+                    <i class="fa-solid fa-droplet me-2 text-info"></i> Tabla de Litrajes
+                </a>
+                <a href="{{ url_for('estado_cultivo.index') }}" class="list-group-item list-group-item-action bg-transparent text-white {% if 'estado-cultivo' in request.path %}active-nav{% endif %}">
+                    <i class="fa-solid fa-layer-group me-2 text-light"></i> Estado de Cultivo (Camas)
+                </a>
+                {% endif %}
+                {% if current_user.has_permission('importador') %}
+                <a href="{{ url_for('importador.index') }}" class="list-group-item list-group-item-action bg-transparent text-white {% if 'importador' in request.path %}active-nav{% endif %}">
+                    <i class="fa-solid fa-file-excel me-2 text-warning"></i> Importador Excel
+                </a>
+                {% endif %}
+                {% endif %}
+
+                <!-- Supermódulos Agronómicos -->
+                {% if current_user.has_permission('drench') or current_user.has_permission('trichos') or current_user.has_permission('desinfecciones') %}
+                <div class="sidebar-section-title px-3 pt-3 pb-1 text-uppercase small text-muted fw-bold">
+                    Otros Módulos
+                </div>
+                {% if current_user.has_permission('drench') %}
+                <a href="{{ url_for('drench.index') }}" class="list-group-item list-group-item-action bg-transparent text-white {% if 'drench' in request.path %}active-nav{% endif %}">
+                    <i class="fa-solid fa-faucet-drip me-2 text-secondary"></i> 2. Drench <span class="badge bg-secondary ms-1">Base</span>
+                </a>
+                {% endif %}
+                {% if current_user.has_permission('trichos') %}
+                <a href="{{ url_for('trichos.index') }}" class="list-group-item list-group-item-action bg-transparent text-white {% if 'trichos' in request.path %}active-nav{% endif %}">
+                    <i class="fa-solid fa-bacteria me-2 text-secondary"></i> 3. Trichos <span class="badge bg-secondary ms-1">Base</span>
+                </a>
+                {% endif %}
+                {% if current_user.has_permission('desinfecciones') %}
+                <a href="{{ url_for('desinfecciones.index') }}" class="list-group-item list-group-item-action bg-transparent text-white {% if 'desinfecciones' in request.path %}active-nav{% endif %}">
+                    <i class="fa-solid fa-spray-can-sparkles me-2 text-secondary"></i> 4. Desinfecciones <span class="badge bg-secondary ms-1">Base</span>
+                </a>
+                {% endif %}
+                {% endif %}
+
+                <!-- Panel de Administración -->
+                {% if current_user.role == 'ADMIN' %}
+                <div class="sidebar-section-title px-3 pt-3 pb-1 text-uppercase small text-muted fw-bold">
+                    Administración
+                </div>
+                <a href="{{ url_for('auth.usuarios') }}" class="list-group-item list-group-item-action bg-transparent text-white {% if 'usuarios' in request.path %}active-nav{% endif %}">
+                    <i class="fa-solid fa-users-gear me-2 text-warning"></i> Gestión de Usuarios
+                </a>
+                {% endif %}
+            </div>
+
+            <div class="mt-auto p-3 text-center text-muted small border-top border-secondary">
+                <div>v1.0.0 &bull; Sistema Florícola</div>
+                <div>Fumigación y Aplicaciones</div>
+            </div>
+        </aside>
+
+        <!-- Page Content -->
+        <div id="page-content-wrapper" class="w-100">
+            <!-- Top Navigation Bar -->
+            <nav class="navbar navbar-expand-lg navbar-light bg-white border-bottom shadow-sm px-4 py-2">
+                <button class="btn btn-outline-secondary btn-sm" id="sidebar-toggle">
+                    <i class="fa-solid fa-bars"></i>
+                </button>
+
+                <div class="ms-3 fw-semibold text-secondary">
+                    {% block page_header %}Gestión de Fumigación Agrícola{% endblock %}
+                </div>
+
+                <div class="ms-auto d-flex align-items-center gap-2">
+                    <span class="badge bg-success-subtle text-success border border-success me-2">
+                        <i class="fa-solid fa-circle-check me-1"></i> Finca Florícola Activa
+                    </span>
+                    <div class="dropdown">
+                        <button class="btn btn-light btn-sm dropdown-toggle fw-semibold text-dark border shadow-sm" type="button" data-bs-toggle="dropdown">
+                            <i class="fa-solid fa-user-circle text-primary me-1"></i> {{ current_user.full_name }}
+                            <span class="badge {% if current_user.role == 'ADMIN' %}bg-danger{% else %}bg-primary{% endif %} ms-1" style="font-size: 0.65rem;">{{ current_user.role }}</span>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+                            <li><h6 class="dropdown-header">Usuario: @{{ current_user.username }}</h6></li>
+                            {% if current_user.role == 'ADMIN' %}
+                            <li><a class="dropdown-item small" href="{{ url_for('auth.usuarios') }}"><i class="fa-solid fa-users-gear me-2 text-primary"></i>Gestión de Usuarios</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            {% endif %}
+                            <li><a class="dropdown-item small text-danger" href="{{ url_for('auth.logout') }}"><i class="fa-solid fa-right-from-bracket me-2"></i>Cerrar Sesión</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </nav>
+
+            <!-- Main Body Container -->
+            <main class="container-fluid px-4 py-4">
+                <!-- Flash Messages -->
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category, message in messages %}
+                            <div class="alert alert-{{ category }} alert-dismissible fade show shadow-sm" role="alert">
+                                {% if category == 'success' %}
+                                    <i class="fa-solid fa-circle-check me-2"></i>
+                                {% elif category == 'danger' %}
+                                    <i class="fa-solid fa-triangle-exclamation me-2"></i>
+                                {% elif category == 'warning' %}
+                                    <i class="fa-solid fa-circle-exclamation me-2"></i>
+                                {% else %}
+                                    <i class="fa-solid fa-circle-info me-2"></i>
+                                {% endif %}
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
+
+                {% block content %}{% endblock %}
+            </main>
+        </div>
+    </div>
+    {% else %}
+    <!-- Public / Login View (No Sidebar, Clean Centered Layout) -->
+    <div class="min-vh-100 d-flex flex-column justify-content-center align-items-center bg-light py-5">
+        <div class="container" style="max-width: 500px;">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }} alert-dismissible fade show shadow-sm mb-4" role="alert">
+                            {% if category == 'success' %}
+                                <i class="fa-solid fa-circle-check me-2"></i>
+                            {% elif category == 'danger' %}
+                                <i class="fa-solid fa-triangle-exclamation me-2"></i>
+                            {% elif category == 'warning' %}
+                                <i class="fa-solid fa-circle-exclamation me-2"></i>
+                            {% else %}
+                                <i class="fa-solid fa-circle-info me-2"></i>
+                            {% endif %}
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            {% block content_login %}{% endblock %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Bootstrap 5.3 JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    {% if current_user %}
+    <script>
+        document.getElementById("sidebar-toggle")?.addEventListener("click", function(e) {
+            e.preventDefault();
+            document.getElementById("wrapper")?.classList.toggle("toggled");
+        });
+    </script>
+    {% endif %}
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

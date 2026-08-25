@@ -1,0 +1,40 @@
+# Environment Variables
+.env
+.env.local
+.env.production
+
+# Python Cache & Bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual Environments
+.venv/
+venv/
+ENV/
+env/
+env.bak/
+venv.bak/
+
+# SQLite Database Files
+*.db
+*.sqlite3
+fumigacion_agricola.db
+
+# Uploaded Files (preserve directory with .gitkeep)
+uploads/*
+!uploads/.gitkeep
+
+# IDE & Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS Generated Files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

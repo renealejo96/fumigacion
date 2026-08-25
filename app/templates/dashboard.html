@@ -1,0 +1,420 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard | Sistema de Fumigación Agrícola{% endblock %}
+{% block page_header %}Panel de Control Agrícola{% endblock %}
+
+{% block content %}
+<div class="row g-3 mb-4">
+    <!-- Stat 1: Rotaciones -->
+    <div class="col-md-6 col-xl-3">
+        <div class="card stat-card border-start border-4 border-warning h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="text-muted small text-uppercase fw-semibold">Rotaciones</div>
+                        <div class="fs-3 fw-bold text-dark">{{ rotations_count }}</div>
+                        <div class="text-muted small">Planificadas en el sistema</div>
+                    </div>
+                    <div class="bg-warning-subtle text-warning p-3 rounded-circle fs-4">
+                        <i class="fa-solid fa-rotate"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stat 2: Órdenes -->
+    <div class="col-md-6 col-xl-3">
+        <div class="card stat-card border-start border-4 border-success h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="text-muted small text-uppercase fw-semibold">Órdenes Generadas</div>
+                        <div class="fs-3 fw-bold text-dark">{{ orders_count }}</div>
+                        <div class="text-muted small">Para fumigación en campo</div>
+                    </div>
+                    <div class="bg-success-subtle text-success p-3 rounded-circle fs-4">
+                        <i class="fa-solid fa-clipboard-check"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stat 3: Productos -->
+    <div class="col-md-6 col-xl-3">
+        <div class="card stat-card border-start border-4 border-primary h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="text-muted small text-uppercase fw-semibold">Catálogo Agroquímicos</div>
+                        <div class="fs-3 fw-bold text-dark">{{ products_count }}</div>
+                        <div class="text-muted small">Productos y dosis activas</div>
+                    </div>
+                    <div class="bg-primary-subtle text-primary p-3 rounded-circle fs-4">
+                        <i class="fa-solid fa-flask-vial"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stat 4: Camas Registradas -->
+    <div class="col-md-6 col-xl-3">
+        <div class="card stat-card border-start border-4 border-info h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="text-muted small text-uppercase fw-semibold">Camas en Finca</div>
+                        <div class="fs-3 fw-bold text-dark">{{ beds_count }}</div>
+                        <div class="text-muted small">{{ crops_count }} Cultivos Configurados</div>
+                    </div>
+                    <div class="bg-info-subtle text-info p-3 rounded-circle fs-4">
+                        <i class="fa-solid fa-layer-group"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Action Shortcuts -->
+<div class="card mb-4 bg-light border">
+    <div class="card-body py-3">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <div class="fw-semibold text-secondary">
+                <i class="fa-solid fa-bolt text-warning me-1"></i> Accesos Rápidos de Operación:
+            </div>
+            <div class="d-flex flex-wrap gap-2">
+                {% if not current_user or current_user.has_permission('fumigacion') %}
+                <a href="{{ url_for('fumigacion.rotacion_crear') }}" class="btn btn-warning btn-sm fw-medium shadow-sm">
+                    <i class="fa-solid fa-plus me-1"></i> Nueva Rotación Semanal
+                </a>
+                {% endif %}
+                {% if not current_user or current_user.has_permission('ordenes_ver') %}
+                <a href="{{ url_for('fumigacion.ordenes_index') }}" class="btn btn-success btn-sm fw-medium shadow-sm">
+                    <i class="fa-solid fa-clipboard-list me-1"></i> Ver Órdenes de Fumigación
+                </a>
+                {% endif %}
+                {% if not current_user or current_user.has_permission('salidas_ver') %}
+                <a href="{{ url_for('fumigacion.salidas_index') }}" class="btn btn-info text-dark btn-sm fw-medium shadow-sm">
+                    <i class="fa-solid fa-dolly me-1"></i> Salidas de Productos
+                </a>
+                {% endif %}
+                {% if not current_user or current_user.has_permission('catalogos') %}
+                <a href="{{ url_for('productos.index') }}" class="btn btn-primary btn-sm fw-medium shadow-sm">
+                    <i class="fa-solid fa-flask me-1"></i> Catálogo de Productos
+                </a>
+                {% endif %}
+                {% if not current_user or current_user.has_permission('importador') %}
+                <a href="{{ url_for('importador.index') }}" class="btn btn-outline-dark btn-sm fw-medium shadow-sm">
+                    <i class="fa-solid fa-file-excel me-1"></i> Importador Excel
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Supermódulos de la Plataforma -->
+<h5 class="fw-bold text-dark mb-3"><i class="fa-solid fa-cubes me-2 text-primary"></i>Supermódulos de Aplicaciones Agrícolas</h5>
+<div class="row g-3 mb-4">
+    <!-- Supermódulo 1: Fumigación -->
+    <div class="col-md-6 col-lg-3">
+        <div class="card h-100 border-2 border-success shadow-sm">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <span class="badge bg-success">1. Activo Completo</span>
+                    <i class="fa-solid fa-spray-can text-success fs-3"></i>
+                </div>
+                <h5 class="card-title fw-bold">Fumigación</h5>
+                <p class="card-text text-muted small">
+                    Planificación de rotaciones semanales, vueltas dinámicas, cálculo automático de litrajes, dosis e impresión de órdenes.
+                </p>
+                <div class="d-grid gap-1">
+                    <a href="{{ url_for('fumigacion.rotaciones_index') }}" class="btn btn-outline-success btn-sm fw-medium">
+                        Rotaciones <i class="fa-solid fa-arrow-right ms-1"></i>
+                    </a>
+                    <a href="{{ url_for('fumigacion.ordenes_index') }}" class="btn btn-outline-secondary btn-sm">
+                        Órdenes Generadas
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Supermódulo 2: Drench -->
+    <div class="col-md-6 col-lg-3">
+        <div class="card h-100 border text-muted">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <span class="badge bg-secondary">2. Estructura Base</span>
+                    <i class="fa-solid fa-faucet-drip text-secondary fs-3"></i>
+                </div>
+                <h5 class="card-title fw-bold text-dark">Drench</h5>
+                <p class="card-text text-muted small">
+                    Aplicaciones al suelo, drench preventivo y curativo, nutrición radicular y fungicidas de suelo.
+                </p>
+                <a href="{{ url_for('drench.index') }}" class="btn btn-outline-secondary btn-sm w-100">
+                    Abrir Módulo Base
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Supermódulo 3: Trichos -->
+    <div class="col-md-6 col-lg-3">
+        <div class="card h-100 border text-muted">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <span class="badge bg-secondary">3. Estructura Base</span>
+                    <i class="fa-solid fa-bacteria text-secondary fs-3"></i>
+                </div>
+                <h5 class="card-title fw-bold text-dark">Trichos</h5>
+                <p class="card-text text-muted small">
+                    Inoculación biológica de Trichoderma, control biológico y monitoreo de colonización radicular.
+                </p>
+                <a href="{{ url_for('trichos.index') }}" class="btn btn-outline-secondary btn-sm w-100">
+                    Abrir Módulo Base
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Supermódulo 4: Desinfecciones -->
+    <div class="col-md-6 col-lg-3">
+        <div class="card h-100 border text-muted">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <span class="badge bg-secondary">4. Estructura Base</span>
+                    <i class="fa-solid fa-spray-can-sparkles text-secondary fs-3"></i>
+                </div>
+                <h5 class="card-title fw-bold text-dark">Desinfecciones</h5>
+                <p class="card-text text-muted small">
+                    Desinfección de camas, poscosecha, reservorios, herramientas e instalaciones de propagación.
+                </p>
+                <a href="{{ url_for('desinfecciones.index') }}" class="btn btn-outline-secondary btn-sm w-100">
+                    Abrir Módulo Base
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tablas de Rotaciones y Órdenes Recientes -->
+<div class="row g-4">
+    <!-- Historial y Trazabilidad de Rotaciones por Semana -->
+    <div class="col-12">
+        <div class="card shadow-sm border-top border-4 border-warning">
+            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div class="d-flex align-items-center gap-2">
+                    <span class="fw-bold fs-5 text-dark">
+                        <i class="fa-solid fa-rotate me-2 text-warning"></i>Historial y Trazabilidad de Rotaciones por Semana
+                    </span>
+                    <span class="badge bg-warning-subtle text-warning-emphasis border border-warning">Control de Versiones & Cambios de Plaga</span>
+                </div>
+                
+                <div class="d-flex align-items-center gap-2">
+                    <label class="form-label mb-0 fw-bold small text-muted">Filtrar por Semana:</label>
+                    <select id="dashboard-week-filter" class="form-select form-select-sm fw-bold border-warning text-dark" style="width: 200px;">
+                        {% for wk in weeks_list %}
+                        <option value="{{ wk }}" {% if wk == selected_week %}selected{% endif %}>Semana {{ wk }}</option>
+                        {% endfor %}
+                    </select>
+                    <a href="{{ url_for('fumigacion.rotaciones_index') }}" class="btn btn-sm btn-outline-secondary text-decoration-none">
+                        <i class="fa-solid fa-list me-1"></i> Ver todas
+                    </a>
+                </div>
+            </div>
+
+            <div class="card-body p-3">
+                {% if weekly_rotations_data %}
+                    {% for wk, rots in weekly_rotations_data.items() %}
+                    <div class="week-rotation-pane" id="week-pane-{{ wk }}" style="{% if wk != selected_week %}display: none;{% endif %}">
+                        
+                        <div class="alert alert-light border d-flex justify-content-between align-items-center mb-3 py-2 px-3">
+                            <div>
+                                <strong><i class="fa-solid fa-calendar-week text-primary me-1"></i> Resumen de Planificación para la Semana {{ wk }}</strong>
+                                <span class="text-muted ms-2 small">({{ rots|length }} versión(es) registrada(s))</span>
+                            </div>
+                            <a href="{{ url_for('fumigacion.rotacion_crear') }}" class="btn btn-warning btn-sm fw-bold shadow-sm">
+                                <i class="fa-solid fa-plus me-1"></i> Nueva Rotación / Versión
+                            </a>
+                        </div>
+
+                        {% for rot in rots %}
+                        <div class="card mb-3 border {% if rot.status == 'APROBADA' %}border-success shadow-sm{% elif rot.status == 'NO_EJECUTADA' %}border-danger-subtle bg-light-subtle{% else %}border-warning{% endif %}">
+                            <div class="card-header py-2 d-flex justify-content-between align-items-center flex-wrap gap-2 {% if rot.status == 'APROBADA' %}bg-success-subtle text-success-emphasis{% elif rot.status == 'NO_EJECUTADA' %}bg-danger-subtle text-danger-emphasis{% else %}bg-warning-subtle text-warning-emphasis{% endif %}">
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="badge bg-dark font-monospace">v{{ rot.version }}</span>
+                                    <strong class="fs-6">{{ rot.title }}</strong>
+                                    
+                                    {% if rot.status == 'APROBADA' %}
+                                    <span class="badge bg-success"><i class="fa-solid fa-circle-check me-1"></i> APROBADA (Oficial / Vigente)</span>
+                                    {% elif rot.status == 'NO_EJECUTADA' %}
+                                    <span class="badge bg-danger"><i class="fa-solid fa-circle-xmark me-1"></i> NO EJECUTADA (Reemplazada por cambio)</span>
+                                    {% elif rot.status == 'ELIMINADA' %}
+                                    <span class="badge bg-secondary"><i class="fa-solid fa-trash-can me-1"></i> ELIMINADA</span>
+                                    {% elif rot.status == 'ANULADA' %}
+                                    <span class="badge bg-secondary"><i class="fa-solid fa-ban me-1"></i> ANULADA</span>
+                                    {% else %}
+                                    <span class="badge bg-warning text-dark"><i class="fa-solid fa-pen-ruler me-1"></i> BORRADOR</span>
+                                    {% endif %}
+                                </div>
+
+                                <div class="small d-flex align-items-center gap-3">
+                                    <span><i class="fa-regular fa-user me-1"></i> <strong>{{ rot.created_by or 'Agrónomo' }}</strong></span>
+                                    <span><i class="fa-regular fa-clock me-1"></i> {{ rot.created_at|format_local_datetime }}</span>
+                                    {% if rot.status != 'ELIMINADA' %}
+                                    <a href="{{ url_for('fumigacion.rotacion_detalle', rotation_id=rot.id) }}" class="btn btn-outline-dark btn-sm py-0 px-2 fw-semibold">
+                                        <i class="fa-regular fa-eye me-1"></i> Ver Plan & Camas
+                                    </a>
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            <div class="card-body p-0">
+                                {% if rot.notes %}
+                                <div class="p-2 px-3 bg-light border-bottom text-muted small">
+                                    <strong><i class="fa-solid fa-info-circle text-info me-1"></i> Motivo / Observaciones del Cambio:</strong> {{ rot.notes }}
+                                </div>
+                                {% endif %}
+
+                                <div class="table-responsive">
+                                    <table class="table table-bordered align-middle mb-0" style="font-size: 0.85rem;">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th style="width: 140px;" class="text-center">Vuelta / Día</th>
+                                                <th>Agroquímicos & Dosis Configurados por Cultivo</th>
+                                                <th style="width: 130px;" class="text-center">Total Productos</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for rd in rot.rounds %}
+                                            <tr>
+                                                <td class="text-center font-monospace">
+                                                    <span class="fw-bold text-dark d-block">{{ rd.name }}</span>
+                                                    <span class="badge bg-light text-secondary border">{{ rd.day }}</span>
+                                                </td>
+                                                <td>
+                                                    {% if rd.formulas %}
+                                                    <div class="d-flex flex-column gap-2 py-1">
+                                                        {% for f in rd.formulas %}
+                                                        <div class="d-flex flex-wrap align-items-center gap-1">
+                                                            <span class="badge {% if 'VEGETATIVO' in f.label %}bg-success-subtle text-success border border-success{% elif 'PRODUCTIVO' in f.label %}bg-primary-subtle text-primary border border-primary{% else %}bg-secondary-subtle text-dark border{% endif %} fw-bold me-1" style="font-size: 0.75rem;">
+                                                                <i class="fa-solid {% if 'VEGETATIVO' in f.label %}fa-leaf{% else %}fa-spa{% endif %} me-1"></i>{{ f.label }}
+                                                            </span>
+                                                            {% for p in f.products %}
+                                                            <span class="badge bg-light text-dark border p-1 d-inline-flex align-items-center gap-1 shadow-sm" title="{{ p.name }}">
+                                                                <strong class="text-primary">{{ p.code }}</strong>
+                                                                <span class="fw-normal text-muted">{{ p.dose }} {{ p.unit }}/L</span>
+                                                            </span>
+                                                            {% endfor %}
+                                                        </div>
+                                                        {% endfor %}
+                                                    </div>
+                                                    {% else %}
+                                                    <span class="text-muted fst-italic">Sin productos asignados en esta vuelta.</span>
+                                                    {% endif %}
+                                                </td>
+                                                <td class="text-center fw-bold">
+                                                    <span class="badge bg-secondary-subtle text-dark border">{{ rd.total_items }} prods</span>
+                                                </td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="text-center py-4 text-muted">
+                        <i class="fa-regular fa-calendar-xmark fs-2 mb-2 d-block text-secondary"></i>
+                        No hay rotaciones registradas todavía.
+                        <div class="mt-2">
+                            <a href="{{ url_for('fumigacion.rotacion_crear') }}" class="btn btn-sm btn-warning">Crear Primera Rotación</a>
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Órdenes Recientes para Impresión -->
+    <div class="col-12">
+        <div class="card shadow-sm border-top border-4 border-success">
+            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                <span class="fw-bold fs-5 text-dark"><i class="fa-solid fa-clipboard-list me-2 text-success"></i>Órdenes Oficiales de Fumigación Recientes</span>
+                <a href="{{ url_for('fumigacion.ordenes_index') }}" class="btn btn-sm btn-outline-success text-decoration-none">Ver todas las órdenes</a>
+            </div>
+            <div class="card-body p-0">
+                {% if recent_orders %}
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Orden #</th>
+                                <th>Semana / Vuelta</th>
+                                <th>Fecha Programada</th>
+                                <th>Responsable</th>
+                                <th class="text-end">Litraje Total</th>
+                                <th class="text-center">Estado</th>
+                                <th class="text-center">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for ord in recent_orders %}
+                            <tr>
+                                <td class="fw-bold text-dark font-monospace">{{ ord.order_number }}</td>
+                                <td><span class="badge bg-light text-primary border font-monospace">Semana {{ ord.week }}</span> &bull; <strong>{{ ord.round_name }}</strong></td>
+                                <td>{{ ord.scheduled_day }}{% if ord.scheduled_date %} ({{ ord.scheduled_date.strftime('%Y-%m-%d') }}){% endif %}</td>
+                                <td>{{ ord.agronomist }}</td>
+                                <td class="fw-bold text-end text-success">{{ ord.total_liters|format_number(1) }} L</td>
+                                <td class="text-center">
+                                    <span class="badge {% if ord.status == 'GENERADA' %}bg-primary{% elif ord.status == 'APROBADA' %}bg-success{% elif ord.status == 'EJECUTADA' %}bg-dark{% else %}bg-secondary{% endif %}">
+                                        {{ ord.status }}
+                                    </span>
+                                </td>
+                                <td class="text-center">
+                                    <a href="{{ url_for('fumigacion.orden_detalle', order_id=ord.id) }}" class="btn btn-outline-success btn-sm py-0 px-2 fw-semibold" title="Imprimir / Ver Orden Oficial">
+                                        <i class="fa-solid fa-print me-1"></i> Imprimir
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-4 text-muted">
+                    <i class="fa-regular fa-folder-open fs-2 mb-2 d-block text-secondary"></i>
+                    No hay órdenes de fumigación generadas aún.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const weekFilter = document.getElementById('dashboard-week-filter');
+    if (weekFilter) {
+        weekFilter.addEventListener('change', function() {
+            const targetWeek = this.value;
+            document.querySelectorAll('.week-rotation-pane').forEach(pane => {
+                pane.style.display = 'none';
+            });
+            const selectedPane = document.getElementById('week-pane-' + targetWeek);
+            if (selectedPane) {
+                selectedPane.style.display = 'block';
+            }
+        });
+    }
+});
+</script>
+{% endblock %}
