@@ -16,15 +16,43 @@ class CalculationEngine:
         n = re.sub(r'[^a-zA-Z0-9]+', '_', n).strip('_').upper()
         return n
 
+    _crops_cache = None
+    _crops_cache_time = 0
+    _litraje_cache = None
+    _litraje_cache_time = 0
+
+    @classmethod
+    def get_all_crops(cls):
+        import time
+        now = time.time()
+        if cls._crops_cache is None or (now - cls._crops_cache_time > 60):
+            cls._crops_cache = Crop.query.all()
+            cls._crops_cache_time = now
+        return cls._crops_cache
+
+    @classmethod
+    def get_litraje_map(cls):
+        import time
+        now = time.time()
+        if cls._litraje_cache is None or (now - cls._litraje_cache_time > 60):
+            all_lits = Litraje.query.all()
+            l_map = {}
+            for l in all_lits:
+                c_clean = cls.normalize_crop_name(l.crop_name)
+                l_map[(c_clean, int(round(l.age)))] = l.liters_per_bed
+            cls._litraje_cache = l_map
+            cls._litraje_cache_time = now
+        return cls._litraje_cache
+
     @classmethod
     def get_crop_config(cls, crop_identifier: str):
         """
-        Finds the Crop configuration model by name or alias with tolerant matching.
+        Finds the Crop configuration model by name or alias with tolerant matching using cached crop models.
         """
         if not crop_identifier:
             return None
         crop_id_clean = cls.normalize_crop_name(crop_identifier)
-        crops = Crop.query.all()
+        crops = cls.get_all_crops()
         for c in crops:
             if cls.normalize_crop_name(c.name) == crop_id_clean:
                 return c
@@ -103,37 +131,38 @@ class CalculationEngine:
     @classmethod
     def get_liters_per_bed(cls, crop_name: str, age: float) -> tuple[float, bool]:
         """
-        Looks up liters per bed from Litraje table for given crop and age.
+        Looks up liters per bed from in-memory Litraje table cache for given crop and age.
         """
         if age is None:
             return 0.0, False
 
         int_age = int(round(age))
         crop_clean = cls.normalize_crop_name(crop_name)
+        l_map = cls.get_litraje_map()
 
-        lit = Litraje.query.filter_by(crop_name=crop_clean, age=int_age).first()
-        if lit:
-            return lit.liters_per_bed, True
+        # 1. Direct match
+        if (crop_clean, int_age) in l_map:
+            return l_map[(crop_clean, int_age)], True
 
+        # 2. Check aliases
         crop_obj = cls.get_crop_config(crop_name)
         if crop_obj:
             candidate_names = [crop_obj.name.upper()] + [a.upper() for a in crop_obj.aliases]
             if 'GYPSOPHILA' in crop_obj.name.upper():
-                candidate_names.extend(['XLENCE', 'BILLION LIGHTS'])
+                candidate_names.extend(['XLENCE', 'BILLION LIGHTS', 'GYPSO'])
             elif 'VERONICA' in crop_obj.name.upper():
                 candidate_names.extend(['VERONICA', 'VERONICA SPLASH'])
-            
-            for c_name in set(candidate_names):
-                lit = Litraje.query.filter_by(crop_name=c_name, age=int_age).first()
-                if lit:
-                    return lit.liters_per_bed, True
 
-        # Fallback to closest configured age
-        closest = Litraje.query.filter(Litraje.crop_name == crop_clean).order_by(
-            db.func.abs(Litraje.age - int_age)
-        ).first()
-        if closest:
-            return closest.liters_per_bed, True
+            for c_name in set(candidate_names):
+                cn_clean = cls.normalize_crop_name(c_name)
+                if (cn_clean, int_age) in l_map:
+                    return l_map[(cn_clean, int_age)], True
+
+        # 3. Fallback to closest configured age from cache
+        matching_ages = [(k_age, ltr) for (k_crop, k_age), ltr in l_map.items() if k_crop == crop_clean]
+        if matching_ages:
+            closest = min(matching_ages, key=lambda x: abs(x[0] - int_age))
+            return closest[1], True
 
         return 0.0, False
 
@@ -171,7 +200,7 @@ class CalculationEngine:
         return f"Camas {', '.join(ranges)}"
 
     @classmethod
-    def calculate_round(cls, round_obj, custom_review_segments=None):
+    def calculate_round(cls, round_obj, custom_review_segments=None, cached_crop_records=None):
         """
         Calculates application segments, product quantities, assigned operators and toxicological info for a round.
         If custom_review_segments is provided, it uses the agronomist's approved/adjusted segments!
@@ -218,28 +247,10 @@ class CalculationEngine:
                 segment_liters = round(standard_beds * liters_per_bed, 1)
                 zone = seg.get('zone', '')
                 operator = seg.get('operator') or get_operator_for_zone(zone)
-                bed_range_str = f"Camas {bed_start}-{bed_end}" if bed_start != bed_end else f"Cama {bed_start}"
+                bed_range_str = seg.get('bed_range', f"Camas {bed_start}-{bed_end}")
 
-                # Determine products for this segment (custom edited or fallback to round items)
-                if 'products' in seg and seg['products'] is not None:
-                    products_list = seg['products']
-                else:
-                    products_list = []
-                    for it in sorted(round_obj.items, key=lambda x: x.order_index):
-                        if (cls.normalize_crop_name(it.crop_name) == cls.normalize_crop_name(crop_name) and 
-                            it.phenological_stage.strip().upper() == stage.strip().upper()):
-                            prod = it.product
-                            products_list.append({
-                                'product_id': prod.id if prod else it.product_id,
-                                'product_code': prod.code if prod else '',
-                                'commercial_name': prod.commercial_name if (prod and prod.commercial_name) else (prod.code if prod else ''),
-                                'dose': it.dose_applied or (prod.dose_fumigation if prod else 0.0),
-                                'dose_unit': it.dose_unit or (prod.unit if prod else 'CC'),
-                                'pest': prod.pest if prod else '',
-                                'active_ingredient': prod.active_ingredient if prod else '',
-                                'toxicological_category': prod.toxicological_category if prod else ''
-                            })
-
+                # Retrieve products assigned to this segment
+                products_list = seg.get('products', [])
                 products_detail = []
                 products_summary_text_parts = []
 
@@ -352,30 +363,33 @@ class CalculationEngine:
             }
 
         # Otherwise calculate from database crop state (filtered by rotation week to prevent multi-week duplication)
-        rot_week = round_obj.rotation.week.strip() if (round_obj and round_obj.rotation and round_obj.rotation.week) else None
-        available_weeks = [w[0] for w in db.session.query(CropStateRecord.week).distinct().order_by(CropStateRecord.week.desc()).all() if w[0]]
+        if cached_crop_records is not None:
+            all_active_records = cached_crop_records
+        else:
+            rot_week = round_obj.rotation.week.strip() if (round_obj and round_obj.rotation and round_obj.rotation.week) else None
+            available_weeks = [w[0] for w in db.session.query(CropStateRecord.week).distinct().order_by(CropStateRecord.week.desc()).all() if w[0]]
 
-        filter_week = None
-        if rot_week:
-            for aw in available_weeks:
-                if aw.strip() == rot_week or rot_week in aw or aw in rot_week:
-                    filter_week = aw
-                    break
+            filter_week = None
+            if rot_week:
+                for aw in available_weeks:
+                    if aw.strip() == rot_week or rot_week in aw or aw in rot_week:
+                        filter_week = aw
+                        break
 
-        if not filter_week and available_weeks:
-            filter_week = available_weeks[0]
+            if not filter_week and available_weeks:
+                filter_week = available_weeks[0]
 
-        rec_query = CropStateRecord.query.filter(
-            CropStateRecord.crop_master.isnot(None),
-            ~CropStateRecord.crop_master.in_(['VACIO', 'DESCARTE', 'TUMBAR', 'NAN', 'TOTAL', 'TOTAL_GENERAL'])
-        )
-        if filter_week:
-            rec_query = rec_query.filter(CropStateRecord.week == filter_week)
+            rec_query = CropStateRecord.query.filter(
+                CropStateRecord.crop_master.isnot(None),
+                ~CropStateRecord.crop_master.in_(['VACIO', 'DESCARTE', 'TUMBAR', 'NAN', 'TOTAL', 'TOTAL_GENERAL'])
+            )
+            if filter_week:
+                rec_query = rec_query.filter(CropStateRecord.week == filter_week)
 
-        all_active_records = rec_query.all()
-        for r in all_active_records:
-            if r.real_age is None or r.real_age < 0:
-                r.real_age = 10.0
+            all_active_records = rec_query.all()
+            for r in all_active_records:
+                if r.real_age is None or r.real_age < 0:
+                    r.real_age = 10.0
 
         mixes_by_crop_stage = {}
         for it_idx, item in enumerate(sorted(round_obj.items, key=lambda x: x.order_index)):

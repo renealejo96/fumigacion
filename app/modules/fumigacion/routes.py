@@ -47,7 +47,9 @@ def rotaciones_index():
     if status_filter != 'all':
         query = query.filter_by(status=status_filter)
 
-    rotations = query.order_by(Rotation.week.desc(), Rotation.version.desc(), Rotation.created_at.desc()).all()
+    rotations = query.options(
+        db.joinedload(Rotation.rounds).joinedload(RotationRound.items).joinedload(RotationRoundItem.product)
+    ).order_by(Rotation.week.desc(), Rotation.version.desc(), Rotation.created_at.desc()).all()
     unique_weeks = [r[0] for r in db.session.query(Rotation.week).distinct().order_by(Rotation.week.desc()).all() if r[0]]
     if current_week_str not in unique_weeks:
         unique_weeks.insert(0, current_week_str)
@@ -316,10 +318,26 @@ def rotacion_detalle(rotation_id):
     if first_round_id and str(first_round_id) in review_by_round:
         review_segments = review_by_round[str(first_round_id)]
     
+    # Preload target week and crop state records once
+    rot_week = rotation.week.strip() if rotation.week else ''
+    available_weeks = [w[0] for w in db.session.query(CropStateRecord.week).distinct().order_by(CropStateRecord.week.desc()).all() if w[0]]
+    filter_week = rot_week if rot_week in available_weeks else (available_weeks[0] if available_weeks else rot_week)
+
+    cached_crop_records = []
+    if filter_week:
+        cached_crop_records = CropStateRecord.query.filter(
+            CropStateRecord.crop_master.isnot(None),
+            ~CropStateRecord.crop_master.in_(['VACIO', 'DESCARTE', 'TUMBAR', 'NAN', 'TOTAL', 'TOTAL_GENERAL']),
+            CropStateRecord.week == filter_week
+        ).all()
+        for r in cached_crop_records:
+            if r.real_age is None or r.real_age < 0:
+                r.real_age = 10.0
+
     # Calculate base rounds (pure theoretical estimate from map + crops) for Paso 1
     rounds_base_calculated = []
     for r in all_rounds:
-        calc_base = CalculationEngine.calculate_round(r)
+        calc_base = CalculationEngine.calculate_round(r, cached_crop_records=cached_crop_records)
         rounds_base_calculated.append({
             'round': r,
             'calc': calc_base
@@ -335,7 +353,7 @@ def rotacion_detalle(rotation_id):
             if str(rid) in review_by_round:
                 custom_segs = review_by_round[str(rid)]
         
-        calc = CalculationEngine.calculate_round(r, custom_review_segments=custom_segs)
+        calc = CalculationEngine.calculate_round(r, custom_review_segments=custom_segs, cached_crop_records=cached_crop_records)
         rounds_calculated.append({
             'round': r,
             'calc': calc
@@ -361,24 +379,13 @@ def rotacion_detalle(rotation_id):
     # Comparison data (Forecast vs Real Validated + Extras)
     comp_data = RequisitionService.get_comparison_data(rotation.id)
 
-    # Distinct block to zone map from crop state records - FILTERED BY ROTATION WEEK WITH FALLBACK
-    rot_week = rotation.week.strip() if rotation.week else ''
-    available_weeks = [w[0] for w in db.session.query(CropStateRecord.week).distinct().order_by(CropStateRecord.week.desc()).all() if w[0]]
-    filter_week = rot_week if rot_week in available_weeks else (available_weeks[0] if available_weeks else rot_week)
-
-    block_records = db.session.query(
-        CropStateRecord.block_full, 
-        CropStateRecord.zone, 
-        CropStateRecord.crop_master
-    ).filter(
-        CropStateRecord.week == filter_week
-    ).distinct().all()
+    # Distinct block to zone map from preloaded crop state records
     block_zone_map = {}
-    for b_full, z, c_mast in block_records:
-        if b_full:
-            block_zone_map[b_full.strip()] = {
-                'zone': (z or '').strip(),
-                'crop': (c_mast or '').strip()
+    for r in cached_crop_records:
+        if r.block_full:
+            block_zone_map[r.block_full.strip()] = {
+                'zone': (r.zone or '').strip(),
+                'crop': (r.crop_master or '').strip()
             }
 
     # Map standard rotation formulas by crop_name and phenological_stage for comparison and restoration

@@ -913,20 +913,24 @@ document.addEventListener('DOMContentLoaded', function() {
     function applyCleanReviewFilters() {
         const cropSelect = document.getElementById('filter-review-crop');
         const blockInput = document.getElementById('filter-review-block');
-        const cropVal = cropSelect ? cropSelect.value : 'all';
-        const blockVal = blockInput ? blockInput.value.toLowerCase().trim() : '';
+        const rawCropVal = cropSelect ? cropSelect.value : 'all';
+        const cropVal = (rawCropVal || 'all').trim().toUpperCase();
+        const rawBlockVal = blockInput ? blockInput.value.trim() : '';
+        const blockVal = rawBlockVal.toLowerCase().replace(/\s+/g, '');
 
         // Persist filter in sessionStorage
-        sessionStorage.setItem('fumigacion_filter_crop', cropVal);
-        sessionStorage.setItem('fumigacion_filter_block', blockVal);
+        sessionStorage.setItem('fumigacion_filter_crop', rawCropVal);
+        sessionStorage.setItem('fumigacion_filter_block', rawBlockVal);
 
         let visibleCount = 0;
         document.querySelectorAll('#clean-review-tbody tr.clean-seg-row').forEach(tr => {
-            const cName = tr.dataset.crop || (tr.querySelector('.seg-crop') ? tr.querySelector('.seg-crop').value : '');
+            const rawCName = tr.dataset.crop || (tr.querySelector('.seg-crop') ? tr.querySelector('.seg-crop').value : '');
+            const cName = (rawCName || '').trim().toUpperCase();
+            
             const bInput = tr.querySelector('.seg-block');
-            const bName = bInput ? bInput.value.toLowerCase().trim() : '';
+            const bName = (bInput ? bInput.value : (tr.dataset.block || '')).toLowerCase().replace(/\s+/g, '');
 
-            const matchCrop = (cropVal === 'all' || cName === cropVal);
+            const matchCrop = (cropVal === 'ALL' || cName === cropVal || cName.includes(cropVal) || cropVal.includes(cName));
             const matchBlock = (blockVal === '' || bName.includes(blockVal));
 
             if (matchCrop && matchBlock) {

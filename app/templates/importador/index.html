@@ -45,12 +45,24 @@
                     <input type="hidden" name="mode" value="replace">
 
                     <div class="d-grid gap-2 pt-2">
-                        <button type="submit" name="action_type" value="preview" class="btn btn-outline-primary btn-sm">
+                        <button type="submit" name="action_type" value="preview" class="btn btn-outline-primary btn-sm btn-import-submit">
                             <i class="fa-solid fa-eye me-1"></i> Previsualizar
                         </button>
-                        <button type="submit" name="action_type" value="commit" class="btn btn-primary btn-sm fw-semibold" onclick="const wk = this.form.target_week.value; return confirm('¿Confirmar importación de Estado de Cultivo REAL para la semana ' + wk + '?\n\nSi ya existían camas de esta semana, se reemplazarán para reiniciar el proceso.');">
+                        <button type="submit" name="action_type" value="commit" class="btn btn-primary btn-sm fw-semibold btn-import-submit" onclick="const wk = this.form.target_week.value; return confirm('¿Confirmar importación de Estado de Cultivo REAL para la semana ' + wk + '?\n\nSi ya existían camas de esta semana, se reemplazarán para reiniciar el proceso.');">
                             <i class="fa-solid fa-upload me-1"></i> Importar Real
                         </button>
+                    </div>
+
+                    <!-- Visual Progress Bar Container -->
+                    <div class="upload-progress-box d-none mt-3 p-2 bg-light border border-primary-subtle rounded text-center">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="small fw-bold text-primary progress-status-text"><i class="fa-solid fa-spinner fa-spin me-1"></i> Subiendo y procesando plano...</span>
+                            <span class="small fw-bold text-primary progress-status-percent">15%</span>
+                        </div>
+                        <div class="progress" style="height: 7px;">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary" role="progressbar" style="width: 15%;"></div>
+                        </div>
+                        <div class="text-muted small mt-1" style="font-size: 0.7rem;">Leyendo bloques, camas y edades del cultivo...</div>
                     </div>
                 </form>
             </div>
@@ -90,12 +102,24 @@
                     <input type="hidden" name="mode" value="replace">
 
                     <div class="d-grid gap-2 pt-2">
-                        <button type="submit" name="action_type" value="preview" class="btn btn-outline-warning text-dark btn-sm">
+                        <button type="submit" name="action_type" value="preview" class="btn btn-outline-warning text-dark btn-sm btn-import-submit">
                             <i class="fa-solid fa-eye me-1"></i> Previsualizar
                         </button>
-                        <button type="submit" name="action_type" value="commit" class="btn btn-warning text-dark btn-sm fw-semibold" onclick="const wk = this.form.target_week.value; return confirm('¿Confirmar importación de Estado de Cultivo para ORDEN DE COMPRA (Semana ' + wk + ')?');">
+                        <button type="submit" name="action_type" value="commit" class="btn btn-warning text-dark btn-sm fw-semibold btn-import-submit" onclick="const wk = this.form.target_week.value; return confirm('¿Confirmar importación de Estado de Cultivo para ORDEN DE COMPRA (Semana ' + wk + ')?');">
                             <i class="fa-solid fa-upload me-1"></i> Importar Compra
                         </button>
+                    </div>
+
+                    <!-- Visual Progress Bar Container -->
+                    <div class="upload-progress-box d-none mt-3 p-2 bg-light border border-warning-subtle rounded text-center">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="small fw-bold text-dark progress-status-text"><i class="fa-solid fa-spinner fa-spin me-1"></i> Subiendo plano proyectado...</span>
+                            <span class="small fw-bold text-dark progress-status-percent">15%</span>
+                        </div>
+                        <div class="progress" style="height: 7px;">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated bg-warning text-dark" role="progressbar" style="width: 15%;"></div>
+                        </div>
+                        <div class="text-muted small mt-1" style="font-size: 0.7rem;">Normalizando camas para orden de compra a 15 días...</div>
                     </div>
                 </form>
             </div>
@@ -126,12 +150,24 @@
                     </div>
 
                     <div class="d-grid gap-2 pt-4">
-                        <button type="submit" name="action_type" value="preview" class="btn btn-outline-success btn-sm">
+                        <button type="submit" name="action_type" value="preview" class="btn btn-outline-success btn-sm btn-import-submit">
                             <i class="fa-solid fa-eye me-1"></i> Previsualizar
                         </button>
-                        <button type="submit" name="action_type" value="commit" class="btn btn-success btn-sm fw-semibold" onclick="return confirm('¿Confirmar actualización de Catálogo de Productos?');">
+                        <button type="submit" name="action_type" value="commit" class="btn btn-success btn-sm fw-semibold btn-import-submit" onclick="return confirm('¿Confirmar actualización de Catálogo de Productos?');">
                             <i class="fa-solid fa-upload me-1"></i> Importar Catálogo
                         </button>
+                    </div>
+
+                    <!-- Visual Progress Bar Container -->
+                    <div class="upload-progress-box d-none mt-3 p-2 bg-light border border-success-subtle rounded text-center">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="small fw-bold text-success progress-status-text"><i class="fa-solid fa-spinner fa-spin me-1"></i> Actualizando catálogo...</span>
+                            <span class="small fw-bold text-success progress-status-percent">15%</span>
+                        </div>
+                        <div class="progress" style="height: 7px;">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated bg-success" role="progressbar" style="width: 15%;"></div>
+                        </div>
+                        <div class="text-muted small mt-1" style="font-size: 0.7rem;">Validando códigos y dosis estándar...</div>
                     </div>
                 </form>
             </div>
@@ -162,12 +198,24 @@
                     </div>
 
                     <div class="d-grid gap-2 pt-4">
-                        <button type="submit" name="action_type" value="preview" class="btn btn-outline-info btn-sm">
+                        <button type="submit" name="action_type" value="preview" class="btn btn-outline-info btn-sm btn-import-submit">
                             <i class="fa-solid fa-eye me-1"></i> Previsualizar
                         </button>
-                        <button type="submit" name="action_type" value="commit" class="btn btn-info text-white btn-sm fw-semibold" onclick="return confirm('¿Confirmar actualización de Matriz de Litrajes?');">
+                        <button type="submit" name="action_type" value="commit" class="btn btn-info text-white btn-sm fw-semibold btn-import-submit" onclick="return confirm('¿Confirmar actualización de Matriz de Litrajes?');">
                             <i class="fa-solid fa-upload me-1"></i> Importar Litrajes
                         </button>
+                    </div>
+
+                    <!-- Visual Progress Bar Container -->
+                    <div class="upload-progress-box d-none mt-3 p-2 bg-light border border-info-subtle rounded text-center">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="small fw-bold text-info progress-status-text"><i class="fa-solid fa-spinner fa-spin me-1"></i> Actualizando litrajes...</span>
+                            <span class="small fw-bold text-info progress-status-percent">15%</span>
+                        </div>
+                        <div class="progress" style="height: 7px;">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated bg-info" role="progressbar" style="width: 15%;"></div>
+                        </div>
+                        <div class="text-muted small mt-1" style="font-size: 0.7rem;">Cargando matriz de consumo por cama...</div>
                     </div>
                 </form>
             </div>
@@ -290,4 +338,42 @@
         </div>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('form[action*="importador/upload"]').forEach(form => {
+        form.addEventListener('submit', function(e) {
+            const fileInput = form.querySelector('input[type="file"]');
+            if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+                return;
+            }
+
+            const progressBox = form.querySelector('.upload-progress-box');
+            const submitBtns = form.querySelectorAll('.btn-import-submit');
+            const progressBar = form.querySelector('.progress-bar');
+            const percentSpan = form.querySelector('.progress-status-percent');
+
+            if (progressBox) {
+                progressBox.classList.remove('d-none');
+            }
+
+            submitBtns.forEach(btn => {
+                btn.disabled = true;
+                btn.classList.add('opacity-50');
+            });
+
+            // Smooth progress simulation while backend processes Excel
+            let progress = 15;
+            const interval = setInterval(() => {
+                if (progress < 90) {
+                    progress += Math.floor(Math.random() * 8) + 3;
+                    if (progress > 90) progress = 90;
+                    if (progressBar) progressBar.style.width = progress + '%';
+                    if (percentSpan) percentSpan.textContent = progress + '%';
+                }
+            }, 300);
+        });
+    });
+});
+</script>
 {% endblock %}
