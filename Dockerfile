@@ -4,8 +4,7 @@ FROM python:3.11-slim
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    DEBIAN_FRONTEND=noninteractive \
-    PORT=5000
+    DEBIAN_FRONTEND=noninteractive
 
 # Install system dependencies required for psycopg2 and compiling packages
 RUN apt-get update && apt-get install -y --no-install-recommends \
