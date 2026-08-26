@@ -10,17 +10,19 @@ class Config:
     DB_PATH = BASE_DIR / 'fumigacion_agricola.db'
     
     # Priority: 1) DATABASE_URL environment variable, 2) Fallback to SQLite
-    pg_url = os.environ.get('DATABASE_URL', '')
+    pg_url = os.environ.get('DATABASE_URL', '').strip()
+    if pg_url.startswith('postgres://'):
+        pg_url = pg_url.replace('postgres://', 'postgresql://', 1)
+        
     sqlite_url = f'sqlite:///{DB_PATH}'
     
     # Check if PostgreSQL connection can be established, otherwise use SQLite
-    use_sqlite = False
     if not pg_url or 'sqlite' in pg_url:
         SQLALCHEMY_DATABASE_URI = sqlite_url
     else:
         try:
             from sqlalchemy import create_engine
-            engine = create_engine(pg_url, connect_args={'connect_timeout': 2})
+            engine = create_engine(pg_url, connect_args={'connect_timeout': 3})
             with engine.connect() as conn:
                 pass
             SQLALCHEMY_DATABASE_URI = pg_url

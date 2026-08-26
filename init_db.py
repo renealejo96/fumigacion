@@ -14,7 +14,10 @@ from seed_data import seed_database
 
 def wait_for_db(max_retries=30, delay=2):
     """Wait for database to become available before proceeding."""
-    pg_url = os.environ.get('DATABASE_URL', '')
+    pg_url = os.environ.get('DATABASE_URL', '').strip()
+    if pg_url.startswith('postgres://'):
+        pg_url = pg_url.replace('postgres://', 'postgresql://', 1)
+        
     if not pg_url or 'sqlite' in pg_url:
         print("[Init DB] Using SQLite database. No wait required.")
         return True
