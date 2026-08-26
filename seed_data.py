@@ -11,7 +11,7 @@ from app.extensions import db
 from app.shared.models import Crop, Product, Litraje, CropStateRecord, ImportBatch
 from app.shared.excel_parser import ExcelParserService
 
-def seed_database(reset=False):
+def seed_database(reset=False, skip_large_files=True):
     app = create_app()
     with app.app_context():
         if reset:
@@ -192,9 +192,9 @@ def seed_database(reset=False):
             else:
                 print(f"  -> Error parsing litrajes: {res.get('error')}")
 
-        # 4. Import 'Estado Cultivo PYGAN 2026-33.xlsx' if exists and empty
+        # 4. Import 'Estado Cultivo PYGAN 2026-33.xlsx' if exists, not skipped, and empty
         ec_file = BASE_DIR / 'Estado Cultivo PYGAN 2026-33.xlsx'
-        if ec_file.exists():
+        if not skip_large_files and ec_file.exists():
             existing_count = CropStateRecord.query.count()
             if existing_count == 0:
                 print(f"Importing Crop State from {ec_file.name} (reading from row 5 in DATOS)...")
