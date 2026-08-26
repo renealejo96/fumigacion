@@ -123,7 +123,9 @@ def create_app(config_class=Config):
         rotations_count = Rotation.query.count()
         orders_count = FumigationOrder.query.count()
 
-        all_rotations = Rotation.query.order_by(Rotation.week.desc(), Rotation.version.desc()).all()
+        all_rotations = Rotation.query.options(
+            db.joinedload(Rotation.rounds).joinedload(RotationRound.items).joinedload(RotationRoundItem.product)
+        ).order_by(Rotation.week.desc(), Rotation.version.desc()).all()
         
         # Group rotations by week with full details of rounds and chemicals
         weekly_rotations_data = {}
