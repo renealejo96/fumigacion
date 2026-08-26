@@ -29,22 +29,34 @@ fumigacion_bp = Blueprint('fumigacion', __name__)
 @login_required
 @permission_required('fumigacion')
 def rotaciones_index():
-    week_filter = request.args.get('week', '').strip()
+    now = get_local_now()
+    cur_year, cur_week, _ = now.isocalendar()
+    current_week_str = f"{cur_year}-{cur_week:02d}"
+
+    raw_week = request.args.get('week')
+    if raw_week is None:
+        week_filter = current_week_str
+    else:
+        week_filter = raw_week.strip()
+
     status_filter = request.args.get('status', 'all')
 
     query = Rotation.query
-    if week_filter:
-        query = query.filter(Rotation.week.ilike(f"%{week_filter}%"))
+    if week_filter and week_filter != 'all':
+        query = query.filter(Rotation.week == week_filter)
     if status_filter != 'all':
         query = query.filter_by(status=status_filter)
 
     rotations = query.order_by(Rotation.week.desc(), Rotation.version.desc(), Rotation.created_at.desc()).all()
-    unique_weeks = [r[0] for r in db.session.query(Rotation.week).distinct().order_by(Rotation.week.desc()).all()]
+    unique_weeks = [r[0] for r in db.session.query(Rotation.week).distinct().order_by(Rotation.week.desc()).all() if r[0]]
+    if current_week_str not in unique_weeks:
+        unique_weeks.insert(0, current_week_str)
 
     return render_template(
         'fumigacion/rotaciones_index.html',
         rotations=rotations,
         selected_week=week_filter,
+        current_week=current_week_str,
         selected_status=status_filter,
         unique_weeks=unique_weeks
     )
@@ -61,7 +73,9 @@ def rotacion_crear():
         week = str(data.get('week', '')).strip()
         title = data.get('title', '').strip() or f"Rotación Semana {week}"
         notes = data.get('notes', '').strip()
-        agronomist = data.get('created_by', 'Agrónomo Responsable').strip()
+        agronomist = (data.get('created_by') or '').strip()
+        if not agronomist or agronomist == 'Agrónomo Responsable':
+            agronomist = session.get('full_name') or session.get('username') or 'Agrónomo Responsable'
         rotation_id = data.get('rotation_id')
 
         if not week:
@@ -347,13 +361,17 @@ def rotacion_detalle(rotation_id):
     # Comparison data (Forecast vs Real Validated + Extras)
     comp_data = RequisitionService.get_comparison_data(rotation.id)
 
-    # Distinct block to zone map from crop state records - FILTERED BY ROTATION WEEK
+    # Distinct block to zone map from crop state records - FILTERED BY ROTATION WEEK WITH FALLBACK
+    rot_week = rotation.week.strip() if rotation.week else ''
+    available_weeks = [w[0] for w in db.session.query(CropStateRecord.week).distinct().order_by(CropStateRecord.week.desc()).all() if w[0]]
+    filter_week = rot_week if rot_week in available_weeks else (available_weeks[0] if available_weeks else rot_week)
+
     block_records = db.session.query(
         CropStateRecord.block_full, 
         CropStateRecord.zone, 
         CropStateRecord.crop_master
     ).filter(
-        CropStateRecord.week == rotation.week
+        CropStateRecord.week == filter_week
     ).distinct().all()
     block_zone_map = {}
     for b_full, z, c_mast in block_records:
@@ -387,6 +405,16 @@ def rotacion_detalle(rotation_id):
             if not any(p['product_code'] == prod_entry['product_code'] for p in rotation_formulas_map[formula_key]):
                 rotation_formulas_map[formula_key].append(prod_entry)
 
+    # Breakdown of chemical assignment by Crop / Variety
+    variety_breakdown = RequisitionService.get_variety_breakdown_data(rotation.id)
+    breakdown_crops = sorted(list(set([v['crop_name'].strip().upper() for v in variety_breakdown if v.get('crop_name')])))
+    
+    # Also ensure rotation_crops has all crops
+    all_rot_crops = set([it.crop_name.strip().upper() for r in rotation.rounds for it in r.items if it.crop_name])
+    for c in breakdown_crops:
+        all_rot_crops.add(c)
+    rotation_crops = sorted(list(all_rot_crops))
+
     return render_template(
         'fumigacion/rotacion_detalle.html',
         rotation=rotation,
@@ -394,6 +422,8 @@ def rotacion_detalle(rotation_id):
         rounds_calculated=rounds_calculated,
         requisition=requisition,
         comp_data=comp_data,
+        variety_breakdown=variety_breakdown,
+        breakdown_crops=breakdown_crops,
         orders=orders,
         additional_apps=additional_apps,
         active_products=active_products,
@@ -558,7 +588,7 @@ def rotacion_get_cumulative(rotation_id):
 @permission_required('fumigacion')
 def rotacion_aprobar(rotation_id):
     rotation = Rotation.query.get_or_404(rotation_id)
-    agronomist = request.form.get('agronomist', rotation.created_by)
+    user_name = session.get('full_name') or session.get('username') or request.form.get('agronomist') or rotation.created_by or "Agrónomo Responsable"
 
     prev_rotations = Rotation.query.filter(Rotation.week == rotation.week, Rotation.id != rotation.id).all()
     for pr in prev_rotations:
@@ -567,14 +597,19 @@ def rotacion_aprobar(rotation_id):
             pr.notes = (pr.notes + " | " if pr.notes else "") + f"Rotación NO EJECUTADA - Reemplazada por Versión {rotation.version}"
 
     rotation.status = 'APROBADA'
-    rotation.approved_by = agronomist
+    rotation.approved_by = user_name
     rotation.approved_at = get_local_now()
+
+    # Sync approved_by to all existing orders for this rotation
+    for ord in rotation.orders:
+        ord.agronomist = user_name
+
     db.session.commit()
 
     RequisitionService.sync_with_final_orders(rotation.id)
 
-    record_audit('FUMIGACION', 'APPROVE_ROTATION', 'Rotation', rotation.id, user=agronomist, details={'week': rotation.week, 'version': rotation.version})
-    flash(f"Rotación de la semana {rotation.week} (v{rotation.version}) APROBADA exitosamente.", "success")
+    record_audit('FUMIGACION', 'APPROVE_ROTATION', 'Rotation', rotation.id, user=user_name, details={'week': rotation.week, 'version': rotation.version})
+    flash(f"Rotación de la semana {rotation.week} (v{rotation.version}) APROBADA por {user_name}. Se habilitó la Revisión & Calibración de Camas y los Programas de Fumigación.", "success")
     return redirect(url_for('fumigacion.rotacion_detalle', rotation_id=rotation.id))
 
 
@@ -588,8 +623,8 @@ def rotacion_desaprobar(rotation_id):
     rotation.approved_at = None
     db.session.commit()
     record_audit('FUMIGACION', 'UNAPPROVE_ROTATION', 'Rotation', rotation.id, details={'week': rotation.week})
-    flash(f"Rotación de la semana {rotation.week} devuelta a estado BORRADOR. Ya puedes editar la matriz con Drag and Drop.", "info")
-    return redirect(url_for('fumigacion.rotacion_editar', rotation_id=rotation.id))
+    flash(f"Rotación de la semana {rotation.week} devuelta a estado BORRADOR. Ya puedes editar la matriz y productos.", "info")
+    return redirect(url_for('fumigacion.rotacion_detalle', rotation_id=rotation.id))
 
 
 @fumigacion_bp.route('/rotaciones/generar-orden/<int:round_id>', methods=['POST'])
@@ -598,7 +633,7 @@ def rotacion_desaprobar(rotation_id):
 def generar_orden(round_id):
     round_obj = RotationRound.query.get_or_404(round_id)
     rotation = round_obj.rotation
-    agronomist = request.form.get('agronomist', rotation.created_by)
+    agronomist = rotation.approved_by or session.get('full_name') or session.get('username') or rotation.created_by or "Agrónomo Responsable"
     notes = request.form.get('notes', '')
 
     custom_segs = None
@@ -644,17 +679,39 @@ def generar_orden(round_id):
 @login_required
 @permission_required('ordenes_ver')
 def ordenes_index():
-    week_filter = request.args.get('week', '').strip()
+    now = get_local_now()
+    cur_year, cur_week, _ = now.isocalendar()
+    current_week_str = f"{cur_year}-{cur_week:02d}"
+
+    raw_week = request.args.get('week')
+    if raw_week is None:
+        week_filter = current_week_str
+    else:
+        week_filter = raw_week.strip()
+
     status_filter = request.args.get('status', 'all')
 
     query = FumigationOrder.query
-    if week_filter:
-        query = query.filter(FumigationOrder.week.ilike(f"%{week_filter}%"))
+    if week_filter and week_filter != 'all':
+        query = query.filter(FumigationOrder.week == week_filter)
     if status_filter != 'all':
         query = query.filter_by(status=status_filter)
 
     orders = query.order_by(FumigationOrder.created_at.desc()).all()
-    return render_template('fumigacion/ordenes_index.html', orders=orders, selected_week=week_filter, selected_status=status_filter)
+
+    # Distinct weeks for dropdown
+    distinct_weeks = [w[0] for w in db.session.query(FumigationOrder.week).distinct().order_by(FumigationOrder.week.desc()).all() if w[0]]
+    if current_week_str not in distinct_weeks:
+        distinct_weeks.insert(0, current_week_str)
+
+    return render_template(
+        'fumigacion/ordenes_index.html',
+        orders=orders,
+        available_weeks=distinct_weeks,
+        selected_week=week_filter,
+        current_week=current_week_str,
+        selected_status=status_filter
+    )
 
 
 @fumigacion_bp.route('/ordenes/<int:order_id>')
@@ -664,8 +721,10 @@ def orden_detalle(order_id):
     order = FumigationOrder.query.get_or_404(order_id)
     
     # Build structured hierarchy: Zone -> Blocks -> Rows + Zone Totals + Zone Product Totals (Liquids & Solids)
+    # Order details strictly by id and order_in_mix to preserve top-to-bottom vertical product sequence
+    sorted_details = sorted(order.details, key=lambda x: (x.id, x.order_in_mix))
     zones_map = {}
-    for d in order.details:
+    for d in sorted_details:
         z = (d.zone or 'GENERAL').strip()
         if z not in zones_map:
             zones_map[z] = {
@@ -740,6 +799,17 @@ def requisicion_exportar_excel(requisition_id):
         as_attachment=True,
         download_name=filename
     )
+
+
+@fumigacion_bp.route('/ordenes/<int:order_id>/marcar-ejecutada', methods=['POST'])
+@login_required
+@permission_required('ordenes_ver')
+def orden_marcar_ejecutada(order_id):
+    order = FumigationOrder.query.get_or_404(order_id)
+    order.status = 'EJECUTADA'
+    db.session.commit()
+    record_audit('FUMIGACION', 'EXECUTE_ORDER', 'FumigationOrder', order.id, details={'order_number': order.order_number})
+    return jsonify({'success': True, 'status': 'EJECUTADA'})
 
 
 @fumigacion_bp.route('/salidas')
@@ -1161,13 +1231,17 @@ def aplicaciones_adicionales():
         db.session.add(add_app)
         db.session.commit()
 
+        # Generate official FumigationOrder for extra application
+        agronomist_name = session.get('full_name') or session.get('username') or "Agrónomo Responsable"
+        OrderService.create_or_update_order_from_additional_apps(week, agronomist=agronomist_name)
+
         # Update requisition difference if active rotation exists for this week
         rot = Rotation.query.filter_by(week=week, status='APROBADA').first() or Rotation.query.filter_by(week=week).first()
         if rot:
             RequisitionService.sync_with_final_orders(rot.id)
 
         record_audit('FUMIGACION', 'CREATE_ADDITIONAL_APP', 'AdditionalApplication', add_app.id, details={'block': block_name, 'product': prod.code, 'reason': reason})
-        flash(f"Aplicación adicional registrada en {block_name} ({reason}).", "success")
+        flash(f"Aplicación adicional registrada en {block_name} ({reason}). Se generó la Orden de Fumigación y Salida de Bodega.", "success")
         return redirect(url_for('fumigacion.aplicaciones_adicionales'))
 
     active_products = Product.query.filter_by(is_active=True).order_by(Product.code.asc()).all()
@@ -1184,12 +1258,24 @@ def aplicaciones_adicionales():
                 'crop': (c_mast or '').strip()
             }
 
+    now = get_local_now()
+    cur_year, cur_week, _ = now.isocalendar()
+    current_week_str = f"{cur_year}-{cur_week:02d}"
+
+    distinct_weeks = [w[0] for w in db.session.query(CropStateRecord.week).distinct().order_by(CropStateRecord.week.desc()).all() if w[0]]
+    rot_weeks = [w[0] for w in db.session.query(Rotation.week).distinct().order_by(Rotation.week.desc()).all() if w[0]]
+    available_weeks = list(dict.fromkeys(distinct_weeks + rot_weeks))
+    if current_week_str not in available_weeks:
+        available_weeks.insert(0, current_week_str)
+
     return render_template(
         'fumigacion/aplicaciones_adicionales.html',
         recent_apps=recent_apps,
         active_products=active_products,
         active_crops=active_crops,
-        block_zone_map=block_zone_map
+        block_zone_map=block_zone_map,
+        available_weeks=available_weeks,
+        current_week=current_week_str
     )
 
 
@@ -1272,6 +1358,10 @@ def aplicaciones_adicionales_guardar_lote():
 
     db.session.commit()
 
+    # Generate official FumigationOrder for extra application
+    agronomist_name = session.get('full_name') or session.get('username') or "Agrónomo Responsable"
+    OrderService.create_or_update_order_from_additional_apps(week, agronomist=agronomist_name)
+
     # Sync with rotation requisition if exists
     rot = Rotation.query.filter_by(week=week, status='APROBADA').first() or Rotation.query.filter_by(week=week).first()
     if rot:
@@ -1282,7 +1372,7 @@ def aplicaciones_adicionales_guardar_lote():
     return jsonify({
         'success': True,
         'count': len(created_records),
-        'message': f'Se registraron exitosamente {len(created_records)} aplicaciones adicionales en la semana {week}.'
+        'message': f'Se registraron exitosamente {len(created_records)} aplicaciones adicionales en la semana {week}. Se generó la Orden de Fumigación y Salida de Bodega.'
     })
 
 
@@ -1297,6 +1387,9 @@ def aplicaciones_adicionales_eliminar(app_id):
 
     db.session.delete(app_obj)
     db.session.commit()
+
+    # Update official FumigationOrder for extra applications
+    OrderService.create_or_update_order_from_additional_apps(week)
 
     rot = Rotation.query.filter_by(week=week, status='APROBADA').first() or Rotation.query.filter_by(week=week).first()
     if rot:

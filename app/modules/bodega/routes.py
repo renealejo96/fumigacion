@@ -85,9 +85,12 @@ def salidas():
                 prev_rotation = approved_rotations[idx + 1]
             break
 
-    # Get ONLY official approved orders for this rotation
+    # Get ONLY official approved orders for this rotation AND any additional extra application orders for this week
     orders = FumigationOrder.query.filter(
-        FumigationOrder.rotation_id == current_rot.id,
+        db.or_(
+            FumigationOrder.rotation_id == current_rot.id,
+            FumigationOrder.week == current_rot.week
+        ),
         FumigationOrder.status.in_(['APROBADA', 'EJECUTADA'])
     ).order_by(FumigationOrder.round_number.asc()).all()
 
@@ -179,19 +182,22 @@ def ordenes():
     """
     week_filter = request.args.get('week', '').strip()
     
-    query = FumigationOrder.query.join(Rotation).filter(
-        Rotation.status == 'APROBADA',
-        FumigationOrder.status.in_(['APROBADA', 'EJECUTADA'])
+    query = FumigationOrder.query.outerjoin(Rotation).filter(
+        db.or_(
+            db.and_(Rotation.status == 'APROBADA', FumigationOrder.status.in_(['APROBADA', 'EJECUTADA'])),
+            db.and_(FumigationOrder.round_number == 99, FumigationOrder.status.in_(['APROBADA', 'EJECUTADA']))
+        )
     )
 
-    if week_filter:
+    if week_filter and week_filter != 'all':
         query = query.filter(FumigationOrder.week == week_filter)
 
     official_orders = query.order_by(FumigationOrder.week.desc(), FumigationOrder.round_number.asc()).all()
 
     # Get distinct weeks of approved orders for filter
     approved_weeks = [r.week for r in Rotation.query.filter(Rotation.status == 'APROBADA').order_by(Rotation.week.desc()).all()]
-    approved_weeks = list(dict.fromkeys(approved_weeks))
+    extra_weeks = [o.week for o in FumigationOrder.query.filter_by(round_number=99).all()]
+    approved_weeks = list(dict.fromkeys(approved_weeks + extra_weeks))
 
     return render_template(
         'bodega/ordenes.html',

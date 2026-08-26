@@ -170,6 +170,149 @@ class OrderService:
 
         return order
 
+    @classmethod
+    def create_or_update_order_from_additional_apps(cls, week: str, agronomist: str = "Agrónomo Responsable") -> FumigationOrder:
+        """
+        Creates or updates a FumigationOrder for all AdditionalApplication records of a given week,
+        ensuring official order details, product summaries, warehouse weighing, and dispatch logs exist.
+        """
+        from app.shared.models import AdditionalApplication, Product, Rotation
+        clean_week = str(week).replace(' ', '').replace('/', '-')
+        order_num = f"ORD-EXTRA-{clean_week}"
+        
+        apps = AdditionalApplication.query.filter_by(week=week).all()
+        order = FumigationOrder.query.filter_by(order_number=order_num).first()
+        
+        if not apps:
+            if order:
+                FumigationOrderDetail.query.filter_by(order_id=order.id).delete()
+                FumigationOrderProductSummary.query.filter_by(order_id=order.id).delete()
+                db.session.delete(order)
+                db.session.commit()
+            return None
+        
+        rot = Rotation.query.filter_by(week=week, status='APROBADA').first() or Rotation.query.filter_by(week=week).first()
+        rot_id = rot.id if rot else None
+
+        if not order:
+            order = FumigationOrder(
+                order_number=order_num,
+                rotation_id=rot_id,
+                title=f"Aplicación Extra / Mancha • Sem {week}",
+                week=week,
+                round_number=99,
+                round_name="Aplicación Extra / Mancha",
+                scheduled_day=apps[0].scheduled_day if apps else "Extra",
+                scheduled_date=datetime.date.today(),
+                agronomist=agronomist,
+                status="APROBADA",
+                total_liters=0.0,
+                total_standard_beds=0.0,
+                total_segments=0
+            )
+            db.session.add(order)
+            db.session.flush()
+        else:
+            order.rotation_id = rot_id or order.rotation_id
+            order.title = f"Aplicación Extra / Mancha • Sem {week}"
+            order.status = "APROBADA"
+            order.agronomist = agronomist or order.agronomist
+            
+        # Clear old details & summaries for this order ID to ensure clean state
+        FumigationOrderDetail.query.filter_by(order_id=order.id).delete()
+        FumigationOrderProductSummary.query.filter_by(order_id=order.id).delete()
+        db.session.flush()
+            
+        total_liters = 0.0
+        total_std_beds = 0.0
+        unique_segments = set()
+        product_summaries_dict = {}
+        
+        for app in apps:
+            prod = Product.query.get(app.product_id) if app.product_id else Product.query.filter_by(code=app.product_code).first()
+            p_code = prod.code if prod else app.product_code
+            p_name = prod.commercial_name if prod else p_code
+            p_unit = prod.unit if prod else (app.dose_unit or 'CC')
+            p_pest = prod.pest if prod else (app.reason or '')
+            p_ai = prod.active_ingredient if prod else ''
+            p_cat = prod.toxicological_category if prod else ''
+            p_color = prod.color_info['name'] if prod else ''
+            
+            bed_range = f"{app.bed_start}-{app.bed_end}"
+            bed_count = max(1, app.bed_end - app.bed_start + 1)
+            seg_key = (app.zone, app.block_name, app.suffix, app.bed_start, app.bed_end)
+            unique_segments.add(seg_key)
+            
+            total_liters += app.total_liters
+            total_std_beds += app.standard_beds
+            
+            # Create Detail Row
+            detail = FumigationOrderDetail(
+                order_id=order.id,
+                round_number=99,
+                round_name=order.round_name,
+                scheduled_day=app.scheduled_day,
+                scheduled_date=order.scheduled_date or datetime.date.today(),
+                operator=app.operator or 'Sin Asignar',
+                zone=app.zone or '',
+                block_name=app.block_name,
+                suffix=app.suffix or 'A',
+                crop_name=app.crop_name or 'N/A',
+                variety_specific=app.crop_name or 'N/A',
+                phenological_stage='EXTRA',
+                real_age=0,
+                standard_beds=app.standard_beds,
+                bed_range=bed_range,
+                bed_count=bed_count,
+                product_code=p_code,
+                commercial_name=p_name,
+                unit=p_unit,
+                dose=app.dose_applied,
+                product_amount=round_product_amount(app.total_product, p_unit),
+                total_liters=app.total_liters,
+                liters_per_bed=app.liters_per_bed,
+                pest=p_pest,
+                active_ingredient=p_ai,
+                toxicological_category=p_cat,
+                toxicological_color=p_color,
+                order_in_mix=1,
+                is_additional=True
+            )
+            db.session.add(detail)
+            
+            # Aggregate product summary
+            if p_code not in product_summaries_dict:
+                product_summaries_dict[p_code] = {
+                    'product_id': prod.id if prod else None,
+                    'product_code': p_code,
+                    'commercial_name': p_name,
+                    'dose': app.dose_applied,
+                    'dose_unit': p_unit,
+                    'total_required_quantity': 0.0,
+                    'pest': p_pest
+                }
+            product_summaries_dict[p_code]['total_required_quantity'] += app.total_product
+
+        for p_code, ps in product_summaries_dict.items():
+            summary = FumigationOrderProductSummary(
+                order_id=order.id,
+                product_id=ps['product_id'],
+                product_code=ps['product_code'],
+                commercial_name=ps['commercial_name'],
+                dose=ps['dose'],
+                dose_unit=ps['dose_unit'],
+                total_required_quantity=round_product_amount(ps['total_required_quantity'], ps['dose_unit']),
+                pest=ps['pest']
+            )
+            db.session.add(summary)
+
+        order.total_liters = round(total_liters, 1)
+        order.total_standard_beds = round(total_std_beds, 2)
+        order.total_segments = len(unique_segments)
+        
+        db.session.commit()
+        return order
+
     @staticmethod
     def export_order_to_excel(order_obj) -> io.BytesIO:
         """

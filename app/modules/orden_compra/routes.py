@@ -2,12 +2,13 @@ import datetime
 import io
 import json
 import pandas as pd
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, send_file
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, send_file, session
 from app.extensions import db
 from app.shared.models import Crop, Product, Litraje, CropStateRecord, Rotation, Requisition, RequisitionItem
 from app.modules.fumigacion.services.calculation_engine import CalculationEngine
 from app.modules.fumigacion.services.requisition_service import RequisitionService
 from app.shared.utils import get_local_now, format_product_amount, format_age
+from app.shared.audit import record_audit
 from app.modules.auth.routes import login_required, permission_required
 
 orden_compra_bp = Blueprint('orden_compra', __name__)
@@ -124,11 +125,15 @@ def index():
         is_target = (i == 2)
         week_options.append({'value': val, 'label': label, 'is_target': is_target})
 
+    # Consolidated Dynamic Pivot Data (15-Day Purchase vs Foliar + Drench + Trichos)
+    pivot_data = RequisitionService.get_consolidated_pivot_data(selected_week)
+
     return render_template(
         'orden_compra/index_new.html',
         selected_week=selected_week,
         rotation=rotation,
         requisition=requisition,
+        pivot_data=pivot_data,
         active_crops=active_crops,
         active_products=active_products,
         block_zone_map=block_zone_map,
@@ -209,9 +214,9 @@ def recalculate_with_budget():
 @login_required
 @permission_required('orden_compra')
 def approve_order():
-    """Aprueba la orden de compra"""
+    """Aprueba y congela la orden de compra"""
     try:
-        data = request.get_json()
+        data = request.get_json() if request.is_json else request.form
         week = data.get('week')
         rotation_id = data.get('rotation_id')
         
@@ -226,15 +231,59 @@ def approve_order():
         if not requisition:
             return jsonify({'success': False, 'error': 'No existe requisición para aprobar'}), 404
         
-        # Approve requisition
+        # Approve requisition (frozen state)
+        user_name = session.get('username') or session.get('name') or 'Ing. Agrónomo'
         requisition.status = 'APROBADO'
-        requisition.approved_by = 'Ing. Agrónomo'  # TODO: Get from session/user
+        requisition.approved_by = user_name
         requisition.approved_at = get_local_now()
         
         db.session.commit()
+        record_audit('ORDEN_COMPRA', 'APPROVE', 'Requisition', requisition.id, details={'week': rotation.week, 'user': user_name, 'total_liters': requisition.total_liters})
         
-        return jsonify({'success': True, 'message': 'Orden de compra aprobada'})
+        return jsonify({'success': True, 'message': f'Orden de compra aprobada exitosamente para la Semana {rotation.week}.'})
         
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@orden_compra_bp.route('/eliminar-orden', methods=['POST'])
+@login_required
+@permission_required('orden_compra')
+def eliminar_orden():
+    """Solo el Administrador puede eliminar/reiniciar una Orden de Compra aprobada"""
+    try:
+        if session.get('role') != 'ADMIN':
+            return jsonify({
+                'success': False, 
+                'error': 'Permiso denegado: Solo los usuarios con rol Administrador pueden eliminar o reiniciar una Orden de Compra.'
+            }), 403
+
+        data = request.get_json() if request.is_json else request.form
+        rotation_id = data.get('rotation_id')
+        week = data.get('week')
+
+        if not rotation_id:
+            return jsonify({'success': False, 'error': 'No se especificó la rotación'}), 400
+
+        rotation = Rotation.query.get(rotation_id)
+        if not rotation:
+            return jsonify({'success': False, 'error': 'Rotación no encontrada'}), 404
+
+        requisition = Requisition.query.filter_by(rotation_id=rotation.id).first()
+        if not requisition:
+            return jsonify({'success': False, 'error': 'No existe orden de compra para eliminar'}), 404
+
+        req_id = requisition.id
+        req_week = requisition.week
+        RequisitionItem.query.filter_by(requisition_id=req_id).delete()
+        db.session.delete(requisition)
+        db.session.commit()
+
+        record_audit('ORDEN_COMPRA', 'DELETE_REQUISITION', 'Requisition', req_id, details={'week': req_week, 'admin': session.get('username')})
+
+        return jsonify({'success': True, 'message': f'Orden de compra de la Semana {req_week} eliminada correctamente. Ya puedes recalcular nuevamente.'})
+
     except Exception as e:
         db.session.rollback()
         return jsonify({'success': False, 'error': str(e)}), 500

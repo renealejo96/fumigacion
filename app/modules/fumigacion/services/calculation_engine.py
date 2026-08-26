@@ -10,20 +10,27 @@ class CalculationEngine:
     def normalize_crop_name(crop_name: str) -> str:
         if not crop_name:
             return ""
-        return crop_name.strip().upper()
+        import unicodedata, re
+        n = str(crop_name).strip()
+        n = unicodedata.normalize('NFKD', n).encode('ASCII', 'ignore').decode('utf-8')
+        n = re.sub(r'[^a-zA-Z0-9]+', '_', n).strip('_').upper()
+        return n
 
     @classmethod
     def get_crop_config(cls, crop_identifier: str):
         """
-        Finds the Crop configuration model by name or alias.
+        Finds the Crop configuration model by name or alias with tolerant matching.
         """
+        if not crop_identifier:
+            return None
         crop_id_clean = cls.normalize_crop_name(crop_identifier)
-        crops = Crop.query.filter_by(is_active=True).all()
+        crops = Crop.query.all()
         for c in crops:
             if cls.normalize_crop_name(c.name) == crop_id_clean:
                 return c
             for alias in c.aliases:
-                if cls.normalize_crop_name(alias) == crop_id_clean or crop_id_clean in cls.normalize_crop_name(alias):
+                alias_clean = cls.normalize_crop_name(alias)
+                if alias_clean == crop_id_clean or crop_id_clean in alias_clean or alias_clean in crop_id_clean:
                     return c
         return None
 
@@ -40,20 +47,31 @@ class CalculationEngine:
         for alias in crop_obj.aliases:
             search_terms.append(cls.normalize_crop_name(alias))
 
-        if 'HYPERICUM' in crop_obj.name.upper():
-            search_terms.extend(['HYPERICUM', 'HYPERYCUM'])
-        elif 'VERONICA' in crop_obj.name.upper():
-            search_terms.extend(['VERONICA', 'VERONICA SPRAY', 'VERONICA SPLASH'])
-        elif 'GYPSOPHILA' in crop_obj.name.upper():
-            search_terms.extend(['GYPSOPHILA', 'XLENCE', 'BILLION LIGHTS'])
-        elif 'SOLIDAGO' in crop_obj.name.upper():
-            search_terms.extend(['SOLIDAGO', 'GOLDEN GLORY YELLOW'])
+        c_name_u = (crop_obj.name or '').upper()
+        if 'HYPERICUM' in c_name_u or 'HYPERYCUM' in c_name_u:
+            search_terms.extend(['HYPERICUM', 'HYPERYCUM', 'MAGICAL'])
+        elif 'VERONICA' in c_name_u:
+            search_terms.extend(['VERONICA', 'VERONICA_SPRAY', 'VERONICA_SPLASH', 'SKYLER'])
+        elif 'GYPSOPHILA' in c_name_u or 'GYPSO' in c_name_u:
+            search_terms.extend(['GYPSOPHILA', 'XLENCE', 'BILLION_LIGHTS', 'GYPSO'])
+        elif 'SOLIDAGO' in c_name_u:
+            search_terms.extend(['SOLIDAGO', 'GOLDEN_GLORY_YELLOW'])
+        elif 'RUSCUS' in c_name_u:
+            search_terms.extend(['RUSCUS'])
+        elif 'SUNFLOWER' in c_name_u or 'GIRASOL' in c_name_u:
+            search_terms.extend(['SUNFLOWER', 'GIRASOL'])
+        elif 'RUMEX' in c_name_u:
+            search_terms.extend(['RUMEX'])
+        elif 'LYSIMACHIA' in c_name_u:
+            search_terms.extend(['LYSIMACHIA'])
+        elif 'ASTER' in c_name_u:
+            search_terms.extend(['ASTER'])
 
-        search_terms = list(set([s for s in search_terms if s]))
+        search_terms = list(set([cls.normalize_crop_name(s) for s in search_terms if s]))
 
         matched = []
         for r in records_query:
-            if not r.crop_master or r.crop_master.upper() in ('VACIO', 'DESCARTE', 'TUMBAR') or r.real_age is None:
+            if not r.crop_master or r.crop_master.upper() in ('VACIO', 'DESCARTE', 'TUMBAR', 'NAN', 'TOTAL', 'TOTAL_GENERAL'):
                 continue
 
             r_crop_master = cls.normalize_crop_name(r.crop_master)
@@ -62,16 +80,20 @@ class CalculationEngine:
 
             is_match = False
             for term in search_terms:
+                if not term:
+                    continue
                 if (term == r_crop_master or 
                     term == r_product or 
                     term in r_product or 
                     term in r_variety or 
-                    (term in r_crop_master and r_crop_master != 'PROD.NUEVOS')):
+                    term in r_crop_master or
+                    r_crop_master in term):
                     is_match = True
                     break
-                if r_crop_master == 'PROD.NUEVOS' and term in r_product:
-                    is_match = True
-                    break
+                if r_crop_master in ('PROD_NUEVOS', 'PROD_NUEVO', 'NUEVOS_PROD'):
+                    if term in r_product or term in r_variety or r_product in term:
+                        is_match = True
+                        break
 
             if is_match:
                 matched.append(r)
@@ -167,7 +189,7 @@ class CalculationEngine:
             }
 
         # If custom reviewed segments are provided (from agronomist review tab)
-        if custom_review_segments is not None:
+        if custom_review_segments is not None and len(custom_review_segments) > 0:
             # Calculate from custom reviewed segments
             total_liters_all = 0.0
             total_std_beds_all = 0.0
@@ -330,25 +352,30 @@ class CalculationEngine:
             }
 
         # Otherwise calculate from database crop state (filtered by rotation week to prevent multi-week duplication)
-        rot_week = round_obj.rotation.week if (round_obj and round_obj.rotation) else None
-        available_weeks = [w[0] for w in db.session.query(CropStateRecord.week).distinct().order_by(CropStateRecord.week.desc()).all()]
+        rot_week = round_obj.rotation.week.strip() if (round_obj and round_obj.rotation and round_obj.rotation.week) else None
+        available_weeks = [w[0] for w in db.session.query(CropStateRecord.week).distinct().order_by(CropStateRecord.week.desc()).all() if w[0]]
 
-        if rot_week and rot_week in available_weeks:
-            filter_week = rot_week
-        elif available_weeks:
+        filter_week = None
+        if rot_week:
+            for aw in available_weeks:
+                if aw.strip() == rot_week or rot_week in aw or aw in rot_week:
+                    filter_week = aw
+                    break
+
+        if not filter_week and available_weeks:
             filter_week = available_weeks[0]
-        else:
-            filter_week = None
 
         rec_query = CropStateRecord.query.filter(
             CropStateRecord.crop_master.isnot(None),
-            ~CropStateRecord.crop_master.in_(['VACIO', 'DESCARTE', 'TUMBAR']),
-            CropStateRecord.real_age.isnot(None)
+            ~CropStateRecord.crop_master.in_(['VACIO', 'DESCARTE', 'TUMBAR', 'NAN', 'TOTAL', 'TOTAL_GENERAL'])
         )
         if filter_week:
             rec_query = rec_query.filter(CropStateRecord.week == filter_week)
 
         all_active_records = rec_query.all()
+        for r in all_active_records:
+            if r.real_age is None or r.real_age < 0:
+                r.real_age = 10.0
 
         mixes_by_crop_stage = {}
         for it_idx, item in enumerate(sorted(round_obj.items, key=lambda x: x.order_index)):
@@ -364,8 +391,15 @@ class CalculationEngine:
         for (crop_name, stage), items_with_idx in mixes_by_crop_stage.items():
             crop_obj = cls.get_crop_config(crop_name)
             if not crop_obj:
-                warnings.append(f"No se encontró configuración para el cultivo '{crop_name}'.")
-                continue
+                # Dynamic fallback object
+                crop_obj = Crop(
+                    name=crop_name.strip(),
+                    veg_min_age=0,
+                    veg_max_age=9,
+                    prod_min_age=10,
+                    prod_max_age=999
+                )
+                crop_obj.aliases = [crop_name.strip()]
 
             crop_records = cls.match_records_for_crop(crop_obj, all_active_records)
             if not crop_records:
@@ -373,9 +407,6 @@ class CalculationEngine:
 
             stage_records = []
             for r in crop_records:
-                # Discard plants below age 2 or out of range
-                if r.real_age < 0:
-                    continue
                 classified_stage = crop_obj.classify_age(r.real_age)
                 if classified_stage == stage:
                     stage_records.append(r)

@@ -31,30 +31,32 @@ class ColumnMapper:
 
     # Aliases for Estado de Cultivo (exact matches after normalize_text)
     CROP_STATE_ALIASES = {
-        'bloques2': {'bloques2', 'bloque2', 'bloques_2', 'blq2', 'bloques', 'bloque'},
+        'bloques2': {'bloques2', 'bloque2', 'bloques_2', 'blq2', 'bloques', 'bloque', 'blq_completo', 'block', 'blocks', 'bloq', 'bloque_nombre'},
         'blq': {'blq', 'bloque_num', 'num_bloque', 'numero_bloque', 'blq_num', 'block_num'},
-        'cama': {'cama', 'cama_num', 'num_cama', 'numero_cama', 'bed'},
-        'sufijo': {'sufijo', 'suffix', 'sub_bloque', 'letra_cama', 'suf'},
-        'cama_estandar': {'cama_estandar', 'cama_estandard', 'camas_estandar', 'cama_est', 'cama_std', 'standard_bed', 'cama_estndar'},
-        'zona': {'zona', 'sector', 'zone'},
-        'edad_real': {'edad_real', 'edad_planta', 'real_age'},
-        'producto_maestro': {'producto_maestro', 'cultivo_maestro', 'master_crop'},
-        'producto': {'producto', 'producto_nombre', 'cultivo_variedad', 'crop_name'},
-        'variedades_elite': {'variedades_elite', 'variedad_elite', 'variedad'},
+        'cama': {'cama', 'cama_num', 'num_cama', 'numero_cama', 'bed', 'camas', 'beds'},
+        'sufijo': {'sufijo', 'suffix', 'sub_bloque', 'letra_cama', 'suf', 'lado'},
+        'cama_estandar': {'cama_estandar', 'cama_estandard', 'camas_estandar', 'cama_est', 'cama_std', 'standard_bed', 'cama_estndar', 'cama_estandar_total', 'metros_estandar'},
+        'zona': {'zona', 'sector', 'zone', 'area', 'zonas', 'bloque_zona'},
+        'edad_real': {'edad_real', 'edad_planta', 'real_age', 'edad', 'edades', 'edad_semanas', 'semanas', 'edad_actual', 'semanas_edad', 'edad_pl'},
+        'edad_poda': {'edad_poda', 'edad_de_poda'},
+        'edad_siem': {'edad_siem', 'edad_siembra', 'edad_de_siembra'},
+        'producto_maestro': {'producto_maestro', 'cultivo_maestro', 'master_crop', 'cultivo', 'especie', 'rubro'},
+        'producto': {'producto', 'producto_nombre', 'cultivo_variedad', 'crop_name', 'nombre_producto'},
+        'variedades_elite': {'variedades_elite', 'variedad_elite', 'variedad', 'variedades', 'variedades_florsani'},
         'variedades_florsani': {'variedades_florsani'},
         'estado': {'estado', 'estado_cultivo', 'status'}
     }
 
     # Aliases for Productos y Dosis
     PRODUCT_ALIASES = {
-        'producto': {'producto', 'codigo', 'cod_producto', 'nombre_corto', 'clave_producto'},
-        'producto_comercial': {'producto_comercial', 'nombre_comercial', 'comercial', 'trade_name'},
+        'producto': {'producto', 'codigo', 'cod_producto', 'nombre_corto', 'clave_producto', 'item'},
+        'producto_comercial': {'producto_comercial', 'nombre_comercial', 'comercial', 'trade_name', 'descripcion'},
         'um': {'um', 'unidad', 'unidad_medida', 'u_m', 'unidad_de_medida', 'unit'},
-        'dosis_fumi': {'dosis_fumi', 'dosis_fumigacion', 'dosis_fumi_l', 'dosis_fumigacion_l', 'dosis_foliar'},
+        'dosis_fumi': {'dosis_fumi', 'dosis_fumigacion', 'dosis_fumi_l', 'dosis_fumigacion_l', 'dosis_foliar', 'dosis'},
         'dosis_drench': {'dosis_drench', 'dosis_drench_l', 'dosis_suelo', 'drench_dose'},
         'plaga': {'plaga', 'blanco_biologico', 'enfermedad', 'target_pest', 'plagas'},
         'ingrediente_activo': {'ingrediente_activo', 'i_a', 'ingrediente', 'active_ingredient', 'principio_activo'},
-        'categoria_toxicologica': {'categoria_toxicologica', 'cat_tox', 'toxicologia', 'toxicidad', 'categoria_tox'}
+        'categoria_toxicologica': {'categoria_toxicologica', 'cat_tox', 'toxicologia', 'toxicidad', 'categoria_tox', 'franja'}
     }
 
     # Aliases for Litrajes
@@ -84,19 +86,29 @@ class ColumnMapper:
     def map_dataframe_columns(cls, df, alias_dict: dict):
         """
         Renames DataFrame columns using the provided alias dictionary.
-        Avoids duplicate collisions.
+        Guarantees all column names in the resulting DataFrame are unique.
         """
-        seen_canonicals = set()
-        column_map = {}
+        seen_cols = set()
+        new_cols = []
+        col_map = {}
         
         for col in df.columns:
             canonical = cls.match_column(col, alias_dict)
-            if canonical in alias_dict and canonical not in seen_canonicals:
-                column_map[col] = canonical
-                seen_canonicals.add(canonical)
+            if canonical in alias_dict and canonical not in seen_cols:
+                target_name = canonical
             else:
-                norm = normalize_text(col)
-                column_map[col] = norm
+                target_name = normalize_text(col) or 'col'
+            
+            unique_name = target_name
+            counter = 1
+            while unique_name in seen_cols:
+                counter += 1
+                unique_name = f"{target_name}_{counter}"
+            
+            seen_cols.add(unique_name)
+            new_cols.append(unique_name)
+            col_map[col] = unique_name
 
-        df_renamed = df.rename(columns=column_map)
-        return df_renamed, column_map
+        df_renamed = df.copy()
+        df_renamed.columns = new_cols
+        return df_renamed, col_map

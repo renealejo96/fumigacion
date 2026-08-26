@@ -4,111 +4,75 @@
 {% block page_header %}Panel de Control Agrícola{% endblock %}
 
 {% block content %}
-<div class="row g-3 mb-4">
+<div class="row g-2 mb-3">
     <!-- Stat 1: Rotaciones -->
-    <div class="col-md-6 col-xl-3">
-        <div class="card stat-card border-start border-4 border-warning h-100">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <div class="text-muted small text-uppercase fw-semibold">Rotaciones</div>
-                        <div class="fs-3 fw-bold text-dark">{{ rotations_count }}</div>
-                        <div class="text-muted small">Planificadas en el sistema</div>
-                    </div>
-                    <div class="bg-warning-subtle text-warning p-3 rounded-circle fs-4">
-                        <i class="fa-solid fa-rotate"></i>
-                    </div>
-                </div>
-            </div>
+    <div class="col-6 col-md-3">
+        <div class="kpi-tile text-center h-100">
+            <div class="kpi-label"><i class="fa-solid fa-rotate text-warning me-1"></i> Rotaciones</div>
+            <div class="kpi-value text-dark">{{ rotations_count }}</div>
+            <div class="text-muted small" style="font-size: 0.72rem;">Planificadas en sistema</div>
         </div>
     </div>
 
     <!-- Stat 2: Órdenes -->
-    <div class="col-md-6 col-xl-3">
-        <div class="card stat-card border-start border-4 border-success h-100">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <div class="text-muted small text-uppercase fw-semibold">Órdenes Generadas</div>
-                        <div class="fs-3 fw-bold text-dark">{{ orders_count }}</div>
-                        <div class="text-muted small">Para fumigación en campo</div>
-                    </div>
-                    <div class="bg-success-subtle text-success p-3 rounded-circle fs-4">
-                        <i class="fa-solid fa-clipboard-check"></i>
-                    </div>
-                </div>
-            </div>
+    <div class="col-6 col-md-3">
+        <div class="kpi-tile text-center h-100">
+            <div class="kpi-label"><i class="fa-solid fa-clipboard-check text-success me-1"></i> Órdenes Oficiales</div>
+            <div class="kpi-value text-success">{{ orders_count }}</div>
+            <div class="text-muted small" style="font-size: 0.72rem;">Listas para pesaje y campo</div>
         </div>
     </div>
 
     <!-- Stat 3: Productos -->
-    <div class="col-md-6 col-xl-3">
-        <div class="card stat-card border-start border-4 border-primary h-100">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <div class="text-muted small text-uppercase fw-semibold">Catálogo Agroquímicos</div>
-                        <div class="fs-3 fw-bold text-dark">{{ products_count }}</div>
-                        <div class="text-muted small">Productos y dosis activas</div>
-                    </div>
-                    <div class="bg-primary-subtle text-primary p-3 rounded-circle fs-4">
-                        <i class="fa-solid fa-flask-vial"></i>
-                    </div>
-                </div>
-            </div>
+    <div class="col-6 col-md-3">
+        <div class="kpi-tile text-center h-100">
+            <div class="kpi-label"><i class="fa-solid fa-flask-vial text-primary me-1"></i> Agroquímicos</div>
+            <div class="kpi-value text-primary">{{ products_count }}</div>
+            <div class="text-muted small" style="font-size: 0.72rem;">Productos y dosis activas</div>
         </div>
     </div>
 
     <!-- Stat 4: Camas Registradas -->
-    <div class="col-md-6 col-xl-3">
-        <div class="card stat-card border-start border-4 border-info h-100">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <div class="text-muted small text-uppercase fw-semibold">Camas en Finca</div>
-                        <div class="fs-3 fw-bold text-dark">{{ beds_count }}</div>
-                        <div class="text-muted small">{{ crops_count }} Cultivos Configurados</div>
-                    </div>
-                    <div class="bg-info-subtle text-info p-3 rounded-circle fs-4">
-                        <i class="fa-solid fa-layer-group"></i>
-                    </div>
-                </div>
-            </div>
+    <div class="col-6 col-md-3">
+        <div class="kpi-tile text-center h-100">
+            <div class="kpi-label"><i class="fa-solid fa-layer-group text-info me-1"></i> Camas en Finca</div>
+            <div class="kpi-value text-dark">{{ beds_count }}</div>
+            <div class="text-muted small" style="font-size: 0.72rem;">{{ crops_count }} Cultivos Configurados</div>
         </div>
     </div>
 </div>
 
 <!-- Quick Action Shortcuts -->
-<div class="card mb-4 bg-light border">
-    <div class="card-body py-3">
+<div class="card shadow-xs mb-3 bg-white">
+    <div class="card-body py-2 px-3">
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
-            <div class="fw-semibold text-secondary">
-                <i class="fa-solid fa-bolt text-warning me-1"></i> Accesos Rápidos de Operación:
+            <div class="fw-semibold text-secondary small">
+                <i class="fa-solid fa-bolt text-warning me-1"></i> Accesos Rápidos:
             </div>
-            <div class="d-flex flex-wrap gap-2">
+            <div class="d-flex flex-wrap gap-1">
                 {% if not current_user or current_user.has_permission('fumigacion') %}
-                <a href="{{ url_for('fumigacion.rotacion_crear') }}" class="btn btn-warning btn-sm fw-medium shadow-sm">
-                    <i class="fa-solid fa-plus me-1"></i> Nueva Rotación Semanal
+                <a href="{{ url_for('fumigacion.rotacion_crear') }}" class="btn btn-warning text-dark btn-sm fw-bold py-1">
+                    <i class="fa-solid fa-plus me-1"></i> Nueva Rotación
                 </a>
                 {% endif %}
                 {% if not current_user or current_user.has_permission('ordenes_ver') %}
-                <a href="{{ url_for('fumigacion.ordenes_index') }}" class="btn btn-success btn-sm fw-medium shadow-sm">
-                    <i class="fa-solid fa-clipboard-list me-1"></i> Ver Órdenes de Fumigación
+                <a href="{{ url_for('fumigacion.ordenes_index') }}" class="btn btn-outline-success btn-sm fw-semibold py-1">
+                    <i class="fa-solid fa-clipboard-list me-1"></i> Órdenes de Fumigación
                 </a>
                 {% endif %}
                 {% if not current_user or current_user.has_permission('salidas_ver') %}
-                <a href="{{ url_for('fumigacion.salidas_index') }}" class="btn btn-info text-dark btn-sm fw-medium shadow-sm">
-                    <i class="fa-solid fa-dolly me-1"></i> Salidas de Productos
+                <a href="{{ url_for('fumigacion.salidas_index') }}" class="btn btn-outline-primary btn-sm fw-semibold py-1">
+                    <i class="fa-solid fa-dolly me-1"></i> Salidas de Bodega
                 </a>
                 {% endif %}
                 {% if not current_user or current_user.has_permission('catalogos') %}
-                <a href="{{ url_for('productos.index') }}" class="btn btn-primary btn-sm fw-medium shadow-sm">
-                    <i class="fa-solid fa-flask me-1"></i> Catálogo de Productos
+                <a href="{{ url_for('productos.index') }}" class="btn btn-outline-secondary btn-sm py-1">
+                    <i class="fa-solid fa-flask me-1"></i> Catálogo
                 </a>
                 {% endif %}
                 {% if not current_user or current_user.has_permission('importador') %}
-                <a href="{{ url_for('importador.index') }}" class="btn btn-outline-dark btn-sm fw-medium shadow-sm">
-                    <i class="fa-solid fa-file-excel me-1"></i> Importador Excel
+                <a href="{{ url_for('importador.index') }}" class="btn btn-outline-dark btn-sm py-1">
+                    <i class="fa-solid fa-file-excel me-1"></i> Importador
                 </a>
                 {% endif %}
             </div>

@@ -4,54 +4,60 @@
 {% block page_header %}Fumigación &bull; Planificación de Rotaciones Semanales{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
     <div>
-        <h4 class="fw-bold mb-1"><i class="fa-solid fa-rotate text-warning me-2"></i>Rotaciones de Fumigación Semanales</h4>
-        <p class="text-muted mb-0 small">Planificación a 15 días, vueltas dinámicas y matriz de productos en celdas limpias estilo Excel.</p>
+        <h4 class="fw-bold mb-0 text-dark d-flex align-items-center gap-2">
+            <i class="fa-solid fa-rotate text-warning"></i> Rotaciones Semanales
+        </h4>
+        <div class="text-muted small">Planificación a 15 días, calibración de camas y vueltas de fumigación</div>
     </div>
-    <div class="d-flex gap-2">
-        <a href="{{ url_for('fumigacion.aplicaciones_adicionales') }}" class="btn btn-outline-danger btn-sm fw-medium">
+    <div class="d-flex gap-2 align-items-center flex-wrap">
+        <a href="{{ url_for('fumigacion.aplicaciones_adicionales') }}" class="btn btn-outline-danger btn-sm fw-semibold">
             <i class="fa-solid fa-bullseye me-1"></i> Aplicaciones Extras / Manchas
         </a>
-        <a href="{{ url_for('fumigacion.rotacion_crear') }}" class="btn btn-warning fw-semibold shadow-sm">
-            <i class="fa-solid fa-plus me-1"></i> Nueva Rotación Semanal
+        <a href="{{ url_for('fumigacion.rotacion_crear') }}" class="btn btn-warning text-dark btn-sm fw-bold shadow-xs">
+            <i class="fa-solid fa-plus me-1"></i> Nueva Rotación
         </a>
     </div>
 </div>
 
-<!-- Filters Bar -->
-<div class="card mb-4 shadow-sm">
-    <div class="card-body py-3">
+<!-- Filters Bar & Search -->
+<div class="card shadow-xs mb-3">
+    <div class="card-body py-2 px-3">
         <form method="GET" class="row g-2 align-items-center">
-            <div class="col-md-4">
+            <div class="col-md-4 col-sm-6">
                 <div class="input-group input-group-sm">
-                    <span class="input-group-text bg-white"><i class="fa-solid fa-calendar-week text-muted"></i></span>
-                    <input type="text" name="week" class="form-control" placeholder="Filtrar por semana (ej. 2026-36, 2634)..." value="{{ selected_week }}">
+                    <span class="input-group-text bg-white text-muted"><i class="fa-solid fa-calendar-week"></i></span>
+                    <select name="week" class="form-select form-select-sm" onchange="this.form.submit()">
+                        <option value="all" {% if selected_week == 'all' %}selected{% endif %}>📅 Todas las semanas</option>
+                        {% for w in unique_weeks %}
+                        <option value="{{ w }}" {% if selected_week == w %}selected{% endif %}>
+                            Semana {{ w }} {% if w == current_week %}(Actual){% endif %}
+                        </option>
+                        {% endfor %}
+                    </select>
                 </div>
             </div>
-            <div class="col-md-3">
-                <select name="status" class="form-select form-select-sm">
+            <div class="col-md-3 col-sm-6">
+                <select name="status" class="form-select form-select-sm" onchange="this.form.submit()">
                     <option value="all" {% if selected_status == 'all' %}selected{% endif %}>Todos los estados</option>
                     <option value="APROBADA" {% if selected_status == 'APROBADA' %}selected{% endif %}>Aprobadas (Vigentes)</option>
                     <option value="BORRADOR" {% if selected_status == 'BORRADOR' %}selected{% endif %}>Borradores</option>
-                    <option value="ANULADA" {% if selected_status == 'ANULADA' %}selected{% endif %}>Anuladas / Reemplazadas</option>
+                    <option value="ANULADA" {% if selected_status == 'ANULADA' %}selected{% endif %}>Anuladas</option>
                 </select>
             </div>
-            <div class="col-auto">
-                <button type="submit" class="btn btn-primary btn-sm">
-                    <i class="fa-solid fa-filter me-1"></i> Filtrar
-                </button>
-                <a href="{{ url_for('fumigacion.rotaciones_index') }}" class="btn btn-outline-secondary btn-sm">Limpiar</a>
+            <div class="col-auto d-flex gap-1">
+                <a href="{{ url_for('fumigacion.rotaciones_index') }}?week=all" class="btn btn-outline-secondary btn-sm py-1">Ver Todas</a>
             </div>
         </form>
     </div>
 </div>
 
 <!-- Rotations Table -->
-<div class="card shadow-sm">
-    <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
-        <span class="fw-bold"><i class="fa-solid fa-list-check me-2 text-warning"></i>Historial de Rotaciones y Versiones por Semana</span>
-        <span class="badge bg-warning-subtle text-dark">{{ rotations|length }} Registros</span>
+<div class="card shadow-xs">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center py-2 px-3 border-bottom">
+        <span class="fw-bold text-dark"><i class="fa-solid fa-list-check me-2 text-warning"></i>Historial de Rotaciones por Semana</span>
+        <span class="badge bg-light text-dark border font-monospace">{{ rotations|length }} Registros</span>
     </div>
     <div class="card-body p-0">
         {% if rotations %}

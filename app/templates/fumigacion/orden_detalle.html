@@ -234,7 +234,7 @@ tr {
         <!-- Status Change Dropdown -->
         <div class="dropdown d-inline-block">
             <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                Estado: <strong>{{ order.status }}</strong>
+                Estado: <strong id="top-status-text">{{ order.status }}</strong>
             </button>
             <ul class="dropdown-menu dropdown-menu-end shadow-sm">
                 <li>
@@ -289,7 +289,7 @@ tr {
                 <div class="border border-dark p-1 rounded text-center bg-light d-inline-block px-3">
                     <div class="small fw-bold text-muted" style="font-size: 0.7rem;">PROGRAMA DE FUMIGACIÓN</div>
                     <div class="fs-6 fw-bold font-monospace text-dark">{{ order.order_number }}</div>
-                    <span class="badge {% if order.status == 'APROBADA' %}bg-success{% elif order.status == 'EJECUTADA' %}bg-dark{% else %}bg-primary{% endif %} text-uppercase" style="font-size: 0.65rem;">
+                    <span class="badge {% if order.status == 'APROBADA' %}bg-success{% elif order.status == 'EJECUTADA' %}bg-primary{% else %}bg-secondary{% endif %} text-uppercase badge-order-status" style="font-size: 0.65rem;">
                         {{ order.status }}
                     </span>
                 </div>
@@ -682,6 +682,26 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function executePrintOrder(orderId) {
+    fetch(`/fumigacion/ordenes/${orderId}/marcar-ejecutada`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            document.querySelectorAll('.badge-order-status').forEach(b => {
+                b.className = 'badge bg-primary text-uppercase badge-order-status';
+                b.textContent = 'EJECUTADA';
+            });
+            const topStatus = document.getElementById('top-status-text');
+            if (topStatus) topStatus.textContent = 'EJECUTADA';
+        }
+    })
+    .catch(err => console.error('Error al marcar orden como ejecutada:', err));
+
     window.print();
 }
 

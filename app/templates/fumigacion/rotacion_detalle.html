@@ -61,6 +61,23 @@
     align-items: center;
     gap: 4px;
 }
+.diff-cell-superavit {
+    background-color: #22c55e !important;
+    color: #ffffff !important;
+    font-weight: 700 !important;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+.diff-cell-deficit {
+    background-color: #ef4444 !important;
+    color: #ffffff !important;
+    font-weight: 700 !important;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+.diff-cell-neutral {
+    background-color: #f8fafc !important;
+    color: #475569 !important;
+    font-weight: 600 !important;
+}
 </style>
 {% endblock %}
 
@@ -93,8 +110,8 @@
                 <div class="text-muted small">
                     <span class="me-3"><i class="fa-regular fa-user me-1"></i> Responsable: <strong>{{ rotation.created_by }}</strong></span>
                     <span class="me-3"><i class="fa-regular fa-clock me-1"></i> Creado: {{ rotation.created_at|format_local_datetime }}</span>
-                    {% if rotation.approved_at %}
-                    <span class="me-3 text-success"><i class="fa-solid fa-stamp me-1"></i> Aprobado por: <strong>{{ rotation.approved_by }}</strong> ({{ rotation.approved_at|format_local_datetime }})</span>
+                    {% if rotation.status == 'APROBADA' and rotation.approved_by %}
+                    <span class="me-3 text-success"><i class="fa-solid fa-stamp me-1"></i> Aprobado por: <strong class="badge bg-success-subtle text-success border border-success">{{ rotation.approved_by }}</strong> ({{ rotation.approved_at|format_local_datetime }})</span>
                     {% endif %}
                 </div>
             </div>
@@ -102,12 +119,12 @@
                 <a href="{{ url_for('fumigacion.ver_salidas', rotation_id=rotation.id) }}" class="btn btn-info btn-sm fw-semibold text-white">
                     <i class="fa-solid fa-dolly me-1"></i> Ver Salidas de Productos
                 </a>
-                <a href="{{ url_for('fumigacion.rotacion_editar', rotation_id=rotation.id) }}" class="btn btn-outline-primary btn-sm fw-semibold">
+                {% if rotation.status != 'APROBADA' %}
+                <a href="{{ url_for('fumigacion.rotacion_editar', rotation_id=rotation.id) }}" class="btn btn-primary btn-sm fw-bold">
                     <i class="fa-solid fa-pen-to-square me-1"></i> Editar Matriz & Productos
                 </a>
-                {% if rotation.status != 'APROBADA' %}
                 <form action="{{ url_for('fumigacion.rotacion_aprobar', rotation_id=rotation.id) }}" method="POST" class="d-inline">
-                    <button type="submit" class="btn btn-success btn-sm fw-bold shadow-sm" onclick="return confirm('¿Aprobar esta versión de rotación como la oficial para la semana {{ rotation.week }}?');">
+                    <button type="submit" class="btn btn-success btn-sm fw-bold shadow-sm" onclick="return confirm('¿Aprobar esta versión de rotación como la oficial para la semana {{ rotation.week }}? Al aprobarla, se habilitará la Revisión & Calibración de Camas y la Generación de Programas.');">
                         <i class="fa-solid fa-circle-check me-1"></i> Aprobar Rotación
                     </button>
                 </form>
@@ -130,12 +147,13 @@
 </div>
 
 <!-- Sequential Navigation Tabs -->
-<ul class="nav nav-tabs nav-fill mb-4 shadow-sm bg-white rounded-top" id="mainWorkflowTabs" role="tablist">
+<ul class="nav nav-tabs nav-fill mb-3 shadow-xs bg-white rounded" id="mainWorkflowTabs" role="tablist">
     <li class="nav-item" role="presentation">
         <button class="nav-link active step-nav-tab text-dark" id="tab-paso1" data-bs-toggle="tab" data-bs-target="#content-paso1" type="button" role="tab">
-            <span class="badge bg-warning text-dark me-1">1</span> Matriz de Rotación & Productos (Pedido a 15 Días)
+            <span class="badge bg-warning text-dark me-1">1</span> Matriz de Rotación & Productos
         </button>
     </li>
+    {% if rotation.status == 'APROBADA' %}
     <li class="nav-item" role="presentation">
         <button class="nav-link step-nav-tab text-success" id="tab-paso2" data-bs-toggle="tab" data-bs-target="#content-paso2" type="button" role="tab">
             <span class="badge bg-success me-1">2</span> Revisión & Calibración de Camas
@@ -143,14 +161,10 @@
     </li>
     <li class="nav-item" role="presentation">
         <button class="nav-link step-nav-tab text-primary" id="tab-paso3" data-bs-toggle="tab" data-bs-target="#content-paso3" type="button" role="tab">
-            <span class="badge bg-primary me-1">3</span> Requisición a 15 Días & Comparativa Real
+            <span class="badge bg-primary me-1">3</span> Programas & Órdenes de Fumigación ({{ orders|length }})
         </button>
     </li>
-    <li class="nav-item" role="presentation">
-        <button class="nav-link step-nav-tab text-dark" id="tab-paso4" data-bs-toggle="tab" data-bs-target="#content-paso4" type="button" role="tab">
-            <span class="badge bg-dark me-1">4</span> Órdenes Oficiales para Impresión ({{ orders|length }})
-        </button>
-    </li>
+    {% endif %}
 </ul>
 
 <div class="tab-content" id="mainWorkflowTabsContent">
@@ -263,9 +277,28 @@
             </div>
             {% endfor %}
         </div>
+
+        {% if rotation.status != 'APROBADA' %}
+        <div class="alert alert-warning border-warning d-flex align-items-center justify-content-between p-3 mb-4 shadow-sm">
+            <div class="d-flex align-items-center">
+                <i class="fa-solid fa-lock text-warning fs-3 me-3"></i>
+                <div>
+                    <h6 class="fw-bold text-dark mb-1">Rotación en Estado BORRADOR</h6>
+                    <div class="text-muted small">
+                        Para habilitar el <strong>Paso 2: Revisión & Calibración de Camas</strong> y el <strong>Paso 3: Programas & Órdenes de Fumigación</strong>, primero debes <strong>Aprobar la Rotación</strong> con el botón verde superior.
+                    </div>
+                </div>
+            </div>
+            <form action="{{ url_for('fumigacion.rotacion_aprobar', rotation_id=rotation.id) }}" method="POST" class="ms-3">
+                <button type="submit" class="btn btn-success fw-bold shadow-sm px-3" onclick="return confirm('¿Aprobar esta versión de rotación para habilitar la calibración de camas y órdenes de fumigación?');">
+                    <i class="fa-solid fa-circle-check me-1"></i> Aprobar Rotación Ahora
+                </button>
+            </form>
+        </div>
+        {% endif %}
     </div>
 
-
+    {% if rotation.status == 'APROBADA' %}
     <!-- ==================== PASO 2: REVISIÓN Y CALIBRACIÓN DE CAMAS (TABLA LIMPIA) ==================== -->
     <div class="tab-pane fade" id="content-paso2" role="tabpanel">
         <div class="card mb-3 shadow-sm bg-light border">
@@ -274,9 +307,9 @@
                     <div class="col-md-3">
                         <label class="form-label small fw-bold mb-0"><i class="fa-solid fa-spa text-success me-1"></i> Filtrar Variedad / Cultivo:</label>
                         <select id="filter-review-crop" class="form-select form-select-sm">
-                            <option value="all">-- Todas las Variedades --</option>
-                            {% for c in active_crops %}
-                            <option value="{{ c.name }}">{{ c.name }}</option>
+                            <option value="all">-- Todos los Cultivos de la Rotación --</option>
+                            {% for c_name in rotation_crops %}
+                            <option value="{{ c_name }}">{{ c_name }}</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -284,12 +317,12 @@
                         <label class="form-label small fw-bold mb-0"><i class="fa-solid fa-magnifying-glass text-secondary me-1"></i> Buscar Bloque:</label>
                         <input type="text" id="filter-review-block" class="form-control form-control-sm" placeholder="ej. BL 15, BL 71...">
                     </div>
-                    <div class="col-md-6 text-end pt-3 d-flex justify-content-end align-items-center gap-2">
+                    <div class="col-md-6 text-start text-md-end pt-2 pt-md-3 d-flex flex-wrap justify-content-start justify-content-md-end align-items-center gap-2">
                         <button type="button" class="btn btn-danger btn-sm fw-bold shadow-sm" id="btn-delete-selected-segments" style="display: none;">
                             <i class="fa-solid fa-trash-can me-1"></i> Eliminar Seleccionados (<span id="selected-segments-count">0</span>)
                         </button>
                         <button type="button" class="btn btn-outline-danger btn-sm fw-semibold" id="btn-add-siembra-poda">
-                            <i class="fa-solid fa-plus me-1"></i> + Camas Siembra / Poda
+                            <i class="fa-solid fa-plus me-1"></i> + Siembra/Poda
                         </button>
                         <button type="button" class="btn btn-outline-secondary btn-sm fw-semibold" id="btn-save-draft-review" title="Guardar cambios de la tabla como borrador de trabajo">
                             <i class="fa-solid fa-floppy-disk me-1"></i> Guardar Borrador
@@ -342,7 +375,7 @@
                             </tr>
                         </thead>
                         <tbody id="clean-review-tbody">
-                            {% if rounds_calculated and rounds_calculated[0] %}
+                            {% if rounds_calculated and rounds_calculated[0] and rounds_calculated[0].calc.segments %}
                             {% set r = rounds_calculated[0].round %}
                             {% set calc = rounds_calculated[0].calc %}
                             {% for s in calc.segments %}
@@ -406,6 +439,21 @@
                                 </td>
                             </tr>
                             {% endfor %}
+                            {% else %}
+                            <tr id="row-no-segments">
+                                <td colspan="11" class="text-center py-4 text-muted">
+                                    <i class="fa-solid fa-layer-group fs-3 text-secondary mb-2 d-block"></i>
+                                    <div class="fw-bold text-dark">No se encontraron camas/bloques automáticamente para los cultivos de esta rotación en la semana {{ rotation.week }}.</div>
+                                    <div class="small mt-1">
+                                        Asegúrate de que en el <strong>Paso 1</strong> hayas configurado productos para los cultivos requeridos y que el archivo de <strong>Estado de Cultivo</strong> esté subido en el Importador.
+                                    </div>
+                                    <div class="mt-2">
+                                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="document.getElementById('btn-add-siembra-poda').click();">
+                                            <i class="fa-solid fa-plus me-1"></i> Agregar Bloques de Siembra / Poda Manualmente
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
                             {% endif %}
                         </tbody>
                     </table>
@@ -415,106 +463,18 @@
     </div>
 
 
-    <!-- ==================== PASO 3: REQUISICIÓN A 15 DÍAS & COMPARATIVA REAL ==================== -->
+    <!-- ==================== PASO 3: PROGRAMAS & ÓRDENES OFICIALES PARA IMPRESIÓN ==================== -->
     <div class="tab-pane fade" id="content-paso3" role="tabpanel">
-        <div class="card mb-4 shadow-sm border-top border-4 border-primary">
-            <div class="card-body py-3">
-                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-                    <div>
-                        <h5 class="fw-bold text-dark mb-0">
-                            <i class="fa-solid fa-cart-flatbed text-primary me-2"></i>Requisición de Compra a 15 Días & Comparativa con Programa Final Validado
-                        </h5>
-                        <div class="text-muted small">Cálculo consolidado de compra vs requerimiento final actualizado (incluyendo aplicaciones adicionales y origen del producto).</div>
-                    </div>
-                    {% if requisition %}
-                    <a href="{{ url_for('fumigacion.requisicion_exportar_excel', requisition_id=requisition.id) }}" class="btn btn-success btn-sm fw-bold shadow-sm">
-                        <i class="fa-solid fa-file-excel me-1"></i> Exportar Requisición a Excel
-                    </a>
-                    {% endif %}
-                </div>
+        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+            <div>
+                <h5 class="fw-bold text-dark mb-0"><i class="fa-solid fa-print text-success me-2"></i>Programas & Órdenes Oficiales de Fumigación</h5>
+                <div class="text-muted small">Órdenes generadas automáticamente al asignar las camas y mezclas calibradas en el Paso 2.</div>
             </div>
-        </div>
-
-        {% if comp_data and comp_data.rows %}
-        <div class="card shadow-sm mb-4">
-            <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
-                <span class="fw-bold text-dark"><i class="fa-solid fa-scale-balanced me-2 text-primary"></i>Tabla Comparativa: Pedido Inicial (15 días) vs Ejecutado Real + Extras</span>
-                <span class="badge bg-primary-subtle text-primary fs-6">Litros Totales de Aplicación: {{ requisition.total_liters|format_number(1) }} L</span>
-            </div>
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-hover align-middle mb-0 small">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Código Producto</th>
-                                <th>Nombre Comercial</th>
-                                <th style="width: 140px;">Origen del Producto</th>
-                                <th class="text-end">Comprado (15 Días)</th>
-                                <th class="text-end">Ejecutado Real</th>
-                                <th class="text-end">Aplicaciones Extras</th>
-                                <th class="text-end">Total Requerido</th>
-                                <th class="text-end">Diferencia (+/-)</th>
-                                <th>Unidad</th>
-                                <th>Estado de Abastecimiento</th>
-                                <th>Blanco / Plaga</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for r in comp_data.rows %}
-                            <tr>
-                                <td class="fw-bold font-monospace text-primary fs-6">{{ r.product_code }}</td>
-                                <td class="fw-semibold">{{ r.commercial_name }}</td>
-                                <td>
-                                    <span class="badge {{ r.origin_badge }}">{{ r.origin_label }}</span>
-                                    {% if r.extra_reasons_str %}
-                                    <div class="text-muted small mt-1" style="font-size: 0.725rem;" title="{{ r.extra_reasons_str }}">
-                                        <i class="fa-solid fa-tag me-1 text-danger"></i>{{ r.extra_reasons_str }}
-                                    </div>
-                                    {% endif %}
-                                </td>
-                                <td class="text-end fw-semibold text-secondary">{{ r.quantity_forecast|format_product(r.unit) }}</td>
-                                <td class="text-end fw-bold text-dark">{{ r.quantity_orders|format_product(r.unit) }}</td>
-                                <td class="text-end fw-bold {% if r.quantity_extras > 0 %}text-danger{% else %}text-muted{% endif %}">
-                                    {{ r.quantity_extras|format_product(r.unit) }}
-                                </td>
-                                <td class="text-end fw-bold text-primary fs-6">{{ r.total_real|format_product(r.unit) }}</td>
-                                <td class="text-end fw-bold {% if r.difference > 0 %}text-danger{% elif r.difference < 0 %}text-info{% else %}text-success{% endif %}">
-                                    {% if r.difference > 0 %}+{% endif %}{{ r.difference|format_product(r.unit) }}
-                                </td>
-                                <td><span class="badge bg-light text-dark border">{{ r.unit }}</span></td>
-                                <td>
-                                    <span class="badge {{ r.badge_class }} border">
-                                        {{ r.status_label }}
-                                    </span>
-                                </td>
-                                <td class="text-muted small">{{ r.pest or '-' }}</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-        {% else %}
-        <div class="text-center py-5 text-muted">No hay requisición calculada para esta rotación.</div>
-        {% endif %}
-    </div>
-
-
-    <!-- ==================== PASO 4: ÓRDENES OFICIALES PARA IMPRESIÓN ==================== -->
-    <div class="tab-pane fade" id="content-paso4" role="tabpanel">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <h5 class="fw-bold text-dark mb-0"><i class="fa-solid fa-print text-success me-2"></i>Órdenes de Fumigación Generadas para Campo & Almacén</h5>
-            <div class="d-flex gap-2">
-                {% for item in rounds_calculated %}
-                {% set r = item.round %}
-                <form action="{{ url_for('fumigacion.generar_orden', round_id=r.id) }}" method="POST" class="d-inline">
-                    <button type="submit" class="btn btn-outline-success btn-sm fw-bold">
-                        <i class="fa-solid fa-stamp me-1"></i> Generar Orden {{ r.name }}
-                    </button>
-                </form>
-                {% endfor %}
-            </div>
+            {% if not orders %}
+            <button type="button" class="btn btn-outline-success btn-sm fw-bold" onclick="document.getElementById('tab-paso2').click();">
+                <i class="fa-solid fa-arrow-left me-1"></i> Ir al Paso 2 para Calibrar y Asignar
+            </button>
+            {% endif %}
         </div>
 
         {% if orders %}
@@ -530,29 +490,41 @@
                                 </div>
                                 <div>
                                     <div class="d-flex align-items-center gap-2 mb-1">
-                                        <span class="badge bg-success font-monospace">{{ ord.status }}</span>
+                                        <span class="badge {% if ord.status == 'APROBADA' %}bg-success{% elif ord.status == 'EJECUTADA' %}bg-primary{% else %}bg-secondary{% endif %} font-monospace">
+                                            {% if ord.status == 'APROBADA' %}<i class="fa-solid fa-circle-check me-1"></i> APROBADA
+                                            {% elif ord.status == 'EJECUTADA' %}<i class="fa-solid fa-spray-can me-1"></i> EJECUTADA
+                                            {% else %}{{ ord.status }}{% endif %}
+                                        </span>
                                         <span class="badge bg-light text-dark border font-monospace">{{ ord.order_number }}</span>
+                                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle">{{ ord.round_name }}</span>
                                     </div>
                                     <h5 class="fw-bold text-dark mb-1 font-monospace">{{ ord.display_title }}</h5>
                                     <div class="text-muted small">
-                                        <span class="me-3"><strong>Vuelta / Día:</strong> {{ ord.round_name }} &bull; {{ ord.scheduled_day }}</span>
-                                        <span class="me-3"><strong>Mezcla:</strong> <strong class="text-primary font-monospace">{{ ord.total_liters|format_number(1) }} L</strong></span>
-                                        <span class="me-3"><strong>Camas:</strong> {{ ord.total_standard_beds|format_number(2) }}</span>
-                                        <span><strong>Registros:</strong> {{ ord.details|length }}</span>
+                                        <span class="me-3"><strong>Día Programado:</strong> {{ ord.scheduled_day }}</span>
+                                        <span class="me-3"><strong>Mezcla Total:</strong> <strong class="text-primary font-monospace">{{ ord.total_liters|format_number(1) }} L</strong></span>
+                                        <span class="me-3"><strong>Camas Estándar:</strong> {{ ord.total_standard_beds|format_number(2) }}</span>
+                                        <span><strong>Bloques Asignados:</strong> {{ ord.details|length }}</span>
                                     </div>
                                 </div>
                             </div>
 
                             <div class="d-flex gap-2 flex-wrap align-items-center">
-                                <a href="{{ url_for('fumigacion.orden_detalle', order_id=ord.id) }}" class="btn btn-success btn-sm fw-bold shadow-sm">
-                                    <i class="fa-solid fa-print me-1 text-warning"></i> Imprimir / Ver Programa
+                                <a href="{{ url_for('fumigacion.orden_detalle', order_id=ord.id) }}" class="btn btn-success btn-sm fw-bold shadow-sm" title="Imprimir Hoja de Campo">
+                                    <i class="fa-solid fa-print me-1"></i> Imprimir Hoja de Campo
                                 </a>
-                                <a href="{{ url_for('fumigacion.ver_salidas', rotation_id=rotation.id, order_id=ord.id) }}" class="btn btn-outline-info btn-sm fw-semibold" title="Ver Salidas de este Programa">
-                                    <i class="fa-solid fa-dolly me-1"></i> Ver Salidas
+                                <a href="{{ url_for('fumigacion.ver_salidas', rotation_id=rotation.id, order_id=ord.id) }}" class="btn btn-outline-info btn-sm fw-semibold" title="Ver Salidas de Bodega">
+                                    <i class="fa-solid fa-warehouse me-1"></i> Salidas Bodega
                                 </a>
                                 <a href="{{ url_for('fumigacion.orden_exportar_excel', order_id=ord.id) }}" class="btn btn-outline-primary btn-sm fw-semibold" title="Descargar Excel">
                                     <i class="fa-solid fa-file-excel me-1"></i> Excel
                                 </a>
+                                {% if ord.round_id %}
+                                <form action="{{ url_for('fumigacion.generar_orden', round_id=ord.round_id) }}" method="POST" class="d-inline" onsubmit="return confirm('¿Deseas regenerar la orden {{ ord.round_name }} con los últimos cambios de camas?');">
+                                    <button type="submit" class="btn btn-outline-secondary btn-sm" title="Regenerar orden con la calibración actual">
+                                        <i class="fa-solid fa-rotate me-1"></i> Regenerar
+                                    </button>
+                                </form>
+                                {% endif %}
                             </div>
                         </div>
                     </div>
@@ -561,13 +533,21 @@
             {% endfor %}
         </div>
         {% else %}
-        <div class="text-center py-5 text-muted">
+        <div class="card shadow-xs text-center py-5 px-3 bg-white">
             <i class="fa-regular fa-clipboard fs-1 text-secondary mb-3"></i>
-            <h5>Aún no se han generado órdenes de fumigación</h5>
-            <p class="small">Ajusta los bloques en el <strong>Paso 2</strong> y presiona <strong>Generar Orden</strong> para emitir la orden imprimible.</p>
+            <h5 class="fw-bold text-dark">Aún no se han generado órdenes de fumigación</h5>
+            <p class="text-muted small mx-auto" style="max-width: 500px;">
+                Para generar una orden oficial imprimible, ve al <strong>Paso 2: Revisión & Calibración de Camas</strong>, revisa los bloques/litros y haz clic en <strong>"Asignar a Vuelta"</strong>.
+            </p>
+            <div>
+                <button type="button" class="btn btn-primary btn-sm fw-bold shadow-xs px-4" onclick="document.getElementById('tab-paso2').click();">
+                    <i class="fa-solid fa-arrow-left me-1"></i> Ir a Paso 2: Revisión de Camas
+                </button>
+            </div>
         </div>
         {% endif %}
     </div>
+    {% endif %}
 
 </div>
 
@@ -594,7 +574,7 @@
                     </select>
                 </div>
                 <div class="alert alert-info py-2 px-3 small mb-0">
-                    <i class="fa-solid fa-circle-info me-1"></i> Al asignar, se recalculará automáticamente el consumo real para esta vuelta en el <strong>Paso 3 (Requisición y Comparativa Real)</strong>. Luego podrás seguir editando la tabla para asignar a la siguiente vuelta.
+                    <i class="fa-solid fa-circle-info me-1"></i> Al hacer clic en <strong>Confirmar y Asignar</strong>, se guardará la calibración y <strong>se generará inmediatamente la Orden de Fumigación Oficial</strong> para esta vuelta, lista para imprimir en el <strong>Paso 3</strong>.
                 </div>
             </div>
             <div class="modal-footer py-2">
@@ -886,16 +866,28 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function restoreFiltersFromStorage() {
-        const savedCrop = sessionStorage.getItem('fumigacion_filter_crop');
-        const savedBlock = sessionStorage.getItem('fumigacion_filter_block');
+        const lastRotId = sessionStorage.getItem('fumigacion_last_rotation_id');
+        const currentRotId = '{{ rotation.id }}';
         const cropSelect = document.getElementById('filter-review-crop');
         const blockInput = document.getElementById('filter-review-block');
 
-        if (savedCrop && cropSelect) {
-            cropSelect.value = savedCrop;
-        }
-        if (savedBlock && blockInput) {
-            blockInput.value = savedBlock;
+        if (lastRotId === currentRotId) {
+            const savedCrop = sessionStorage.getItem('fumigacion_filter_crop');
+            const savedBlock = sessionStorage.getItem('fumigacion_filter_block');
+
+            if (savedCrop && cropSelect) {
+                cropSelect.value = savedCrop;
+            }
+            if (savedBlock && blockInput) {
+                blockInput.value = savedBlock;
+            }
+        } else {
+            // New rotation opened: show all blocks by default
+            sessionStorage.setItem('fumigacion_last_rotation_id', currentRotId);
+            sessionStorage.removeItem('fumigacion_filter_crop');
+            sessionStorage.removeItem('fumigacion_filter_block');
+            if (cropSelect) cropSelect.value = 'all';
+            if (blockInput) blockInput.value = '';
         }
     }
 

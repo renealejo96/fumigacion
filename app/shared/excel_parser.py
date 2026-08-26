@@ -148,8 +148,8 @@ class ExcelParserService:
     @staticmethod
     def parse_crop_state_excel(file_or_path, header_row=4, sheet_name='DATOS'):
         """
-        Parses 'Estado Cultivo PYGAN 2026-33.xlsx'.
-        Header begins at row index 4 (5th line in Excel).
+        Parses 'Estado Cultivo PYGAN 2026-33.xlsx' or any crop state file.
+        Header begins at row index 4 (5th line in Excel) by default, with auto-detection fallback.
         Returns dict with:
         - success: bool
         - data: list of cleaned bed records
@@ -160,71 +160,115 @@ class ExcelParserService:
         try:
             xls = pd.ExcelFile(file_or_path)
             
-            target_sheet = sheet_name if sheet_name in xls.sheet_names else ('DATOS' if 'DATOS' in xls.sheet_names else xls.sheet_names[0])
+            # 1. Sheet selection: prioritize explicit sheet_name, then DATOS, then other standard names
+            target_sheet = None
+            if sheet_name and sheet_name in xls.sheet_names:
+                target_sheet = sheet_name
+            elif 'DATOS' in xls.sheet_names:
+                target_sheet = 'DATOS'
+            else:
+                for c_name in ['DATOS CULTIVO', 'ESTADO DE CULTIVO', 'ESTADO_CULTIVO', 'ESTADOCULTIVO', 'PLANO DE CULTIVO', 'PLANO']:
+                    for s in xls.sheet_names:
+                        if normalize_text(s) == normalize_text(c_name):
+                            target_sheet = s
+                            break
+                    if target_sheet:
+                        break
             
-            # Read from specified header row
+            if not target_sheet:
+                target_sheet = xls.sheet_names[0]
+            
+            # 2. Read DataFrame with initial header_row and verify columns
             df = pd.read_excel(xls, sheet_name=target_sheet, header=header_row)
-            
             df, col_map = ColumnMapper.map_dataframe_columns(df, ColumnMapper.CROP_STATE_ALIASES)
             
+            # If essential columns not found at header_row, scan first 12 rows
+            if 'bloques2' not in df.columns and 'cama' not in df.columns:
+                for test_hdr in range(12):
+                    if test_hdr == header_row:
+                        continue
+                    try:
+                        df_test = pd.read_excel(xls, sheet_name=target_sheet, header=test_hdr)
+                        df_test, test_map = ColumnMapper.map_dataframe_columns(df_test, ColumnMapper.CROP_STATE_ALIASES)
+                        if 'bloques2' in df_test.columns or ('cama' in df_test.columns and ('producto_maestro' in df_test.columns or 'producto' in df_test.columns)):
+                            df = df_test
+                            col_map = test_map
+                            header_row = test_hdr
+                            break
+                    except Exception:
+                        continue
+
             # Ensure essential columns exist
             if 'bloques2' not in df.columns:
-                # Try finding any column with 'bloq'
-                bloq_cols = [c for c in df.columns if 'bloq' in str(c).lower()]
+                bloq_cols = [c for c in df.columns if 'bloq' in str(c).lower() or 'block' in str(c).lower()]
                 if bloq_cols:
                     df['bloques2'] = df[bloq_cols[0]]
                 else:
-                    return {'success': False, 'error': "No se encontró columna para Bloques (BLOQUES2)."}
+                    return {'success': False, 'error': f"No se encontró columna para Bloques (BLOQUES2) en la hoja '{target_sheet}'."}
 
             cleaned_records = []
             crops_counter = {}
             zones_counter = {}
             total_std_beds = 0.0
 
+            def safe_scalar_str(val, default=''):
+                if val is None or pd.isna(val):
+                    return default
+                if hasattr(val, 'iloc'):
+                    val = val.iloc[0]
+                s = str(val).strip()
+                return s if s.lower() != 'nan' else default
+
+            def safe_scalar_float(val, default=None):
+                if val is None or pd.isna(val):
+                    return default
+                if hasattr(val, 'iloc'):
+                    val = val.iloc[0]
+                try:
+                    f = float(val)
+                    return f if not np.isnan(f) else default
+                except (ValueError, TypeError):
+                    return default
+
             for idx, row in df.iterrows():
-                block_full = str(row.get('bloques2', '')).strip() if pd.notna(row.get('bloques2')) else ''
-                if not block_full or block_full.upper() in ('NAN', 'TOTAL', 'BLOQUES2'):
+                block_full = safe_scalar_str(row.get('bloques2'))
+                if not block_full or block_full.upper() in ('NAN', 'TOTAL', 'BLOQUES2', 'NONE', 'TOTAL GENERAL'):
                     continue
 
                 # Block num
-                block_num = str(row.get('blq', '')).strip() if pd.notna(row.get('blq')) else ''
-                if not block_num or block_num == 'nan':
+                block_num = safe_scalar_str(row.get('blq'))
+                if not block_num:
                     block_num = block_full.replace('BL', '').replace('BLQ', '').strip()
 
                 # Bed number
-                bed_val = row.get('cama')
-                try:
-                    bed_num = int(float(bed_val))
-                except (ValueError, TypeError):
-                    bed_num = 1
+                bed_num_f = safe_scalar_float(row.get('cama'), default=1.0)
+                bed_num = int(bed_num_f) if bed_num_f is not None else 1
 
                 # Suffix
-                suffix = str(row.get('sufijo', 'A')).strip().upper() if pd.notna(row.get('sufijo')) else 'A'
-                if not suffix or suffix == 'NAN':
-                    suffix = 'A'
+                suffix = safe_scalar_str(row.get('sufijo'), default='A').upper() or 'A'
 
                 # Crop master & Product
-                crop_master = str(row.get('producto_maestro', '')).strip().upper() if pd.notna(row.get('producto_maestro')) else ''
-                product_name = str(row.get('producto', '')).strip().upper() if pd.notna(row.get('producto')) else crop_master
-                variety = str(row.get('variedades_elite', '')).strip().upper() if pd.notna(row.get('variedades_elite')) else ''
-                zone = str(row.get('zona', '')).strip().upper() if pd.notna(row.get('zona')) else ''
-                status_raw = str(row.get('estado', '')).strip().upper() if pd.notna(row.get('estado')) else ''
+                crop_master = safe_scalar_str(row.get('producto_maestro')).upper()
+                product_name = safe_scalar_str(row.get('producto')).upper() or crop_master
+                variety = safe_scalar_str(row.get('variedades_elite')).upper()
+                zone = safe_scalar_str(row.get('zona')).upper()
+                status_raw = safe_scalar_str(row.get('estado')).upper()
 
                 # Standard bed
-                std_bed = 1.0
-                if 'cama_estandar' in row and pd.notna(row['cama_estandar']):
-                    try:
-                        std_bed = float(row['cama_estandar'])
-                    except (ValueError, TypeError):
-                        std_bed = 1.0
+                std_bed = safe_scalar_float(row.get('cama_estandar'), default=1.0)
+                if std_bed is None or std_bed <= 0:
+                    std_bed = 1.0
 
-                # Real age
-                real_age = None
-                if 'edad_real' in row and pd.notna(row['edad_real']):
-                    try:
-                        real_age = float(row['edad_real'])
-                    except (ValueError, TypeError):
-                        real_age = None
+                # Real age with fallbacks (edad_real, edad_poda, edad_siem)
+                real_age = safe_scalar_float(row.get('edad_real'))
+                if real_age is None:
+                    real_age = safe_scalar_float(row.get('edad_poda'))
+                if real_age is None:
+                    real_age = safe_scalar_float(row.get('edad_siem'))
+
+                # If no age found but crop is active, default to 10.0 so beds are never lost
+                if real_age is None and crop_master and crop_master not in ('VACIO', 'DESCARTE', 'TUMBAR'):
+                    real_age = 10.0
 
                 cleaned_records.append({
                     'block_full': block_full,

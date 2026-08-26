@@ -37,7 +37,7 @@
                 
                 {% if current_user.has_permission('orden_compra') %}
                 <a href="{{ url_for('orden_compra.index') }}" class="list-group-item list-group-item-action bg-transparent text-white {% if '/orden-compra' in request.path %}active-nav{% endif %}">
-                    <i class="fa-solid fa-cart-shopping me-2 text-warning"></i> Orden de Compra
+                    <i class="fa-solid fa-cart-shopping me-2 text-warning"></i> Compras & Abastecimiento
                 </a>
                 {% endif %}
 
@@ -146,6 +146,9 @@
 
         <!-- Page Content -->
         <div id="page-content-wrapper" class="w-100">
+            <!-- Sidebar Mobile Backdrop Overlay -->
+            <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
+
             <!-- Top Navigation Bar -->
             <nav class="navbar navbar-expand-lg navbar-light bg-white border-bottom shadow-sm px-4 py-2">
                 <button class="btn btn-outline-secondary btn-sm" id="sidebar-toggle">
@@ -240,6 +243,9 @@
         document.getElementById("sidebar-toggle")?.addEventListener("click", function(e) {
             e.preventDefault();
             document.getElementById("wrapper")?.classList.toggle("toggled");
+        });
+        document.getElementById("sidebar-backdrop")?.addEventListener("click", function(e) {
+            document.getElementById("wrapper")?.classList.remove("toggled");
         });
     </script>
     {% endif %}

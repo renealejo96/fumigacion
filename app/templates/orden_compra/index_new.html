@@ -5,140 +5,293 @@
 
 {% block extra_css %}
 <style>
-.bed-config-table th {
-    background-color: #f8fafc;
-    border: 1px solid #cbd5e1;
-    font-size: 0.775rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    padding: 6px 4px;
-    text-align: center;
-}
-.bed-config-table td {
-    border: 1px solid #cbd5e1;
-    padding: 6px 8px;
-    vertical-align: middle;
-}
-.row-state-veg {
+.kpi-tile {
     background-color: #ffffff;
+    border: 1px solid var(--card-border);
+    border-radius: 0.375rem;
+    padding: 0.5rem 0.75rem;
+    transition: border-color 0.15s ease;
 }
-.row-state-prod {
+.kpi-tile:hover {
+    border-color: #cbd5e1;
+}
+.kpi-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #64748b;
+    font-weight: 600;
+    margin-bottom: 0.15rem;
+}
+.kpi-value {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #0f172a;
+    line-height: 1.2;
+}
+.diff-cell-superavit {
+    background-color: #22c55e !important;
+    color: #ffffff !important;
+    font-weight: 700 !important;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+.diff-cell-deficit {
+    background-color: #ef4444 !important;
+    color: #ffffff !important;
+    font-weight: 700 !important;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+.diff-cell-neutral {
+    background-color: #f8fafc !important;
+    color: #475569 !important;
+    font-weight: 600 !important;
+}
+.pivot-child-box {
     background-color: #f8fafc;
+    border-left: 4px solid #0284c7;
+    border-radius: 0 4px 4px 0;
 }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="mb-3">
-    <a href="{{ url_for('dashboard') }}" class="text-decoration-none text-muted small">
-        <i class="fa-solid fa-arrow-left me-1"></i> Volver al Dashboard
-    </a>
-</div>
-
-<!-- Header Card -->
-<div class="card mb-4 shadow-sm border-start border-4 border-warning">
-    <div class="card-body">
-        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
-            <div>
-                <h3 class="fw-bold text-dark mb-1">
-                    <i class="fa-solid fa-cart-shopping text-warning me-2"></i>Orden de Compra a 15 Días
-                </h3>
-                <p class="text-muted mb-0">Configuración de camas y pedido de agroquímicos calculado por número de camas configuradas</p>
-            </div>
-        </div>
+<!-- Top Header & Week Navigation Strip -->
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+    <div>
+        <a href="{{ url_for('dashboard') }}" class="text-decoration-none text-muted small d-inline-block mb-1">
+            <i class="fa-solid fa-arrow-left me-1"></i> Dashboard
+        </a>
+        <h4 class="fw-bold mb-0 text-dark d-flex align-items-center gap-2">
+            <i class="fa-solid fa-cart-shopping text-warning"></i> Compras & Control de Abastecimiento
+        </h4>
+        <div class="text-muted small">Cálculo proyectado (15 días) vs balance global ejecutado en campo (Fumigación + Drench + Trichos)</div>
     </div>
-</div>
 
-<!-- Week Selection -->
-<div class="card mb-4 shadow-sm">
-    <div class="card-body">
-        <form method="GET" action="{{ url_for('orden_compra.index') }}">
-            <div class="row g-3 align-items-end">
-                <div class="col-md-4">
-                    <label class="form-label fw-bold">
-                        <i class="fa-solid fa-calendar-check text-primary me-1"></i> Semana de Planificación
-                    </label>
-                    <select name="week" class="form-select" onchange="this.form.submit()">
-                        {% for w in week_options %}
-                        <option value="{{ w.value }}" {% if w.value == selected_week %}selected{% endif %}>
-                            {{ w.label }} {% if w.is_target %}(A 15 días){% endif %}
-                        </option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="col-md-8 text-end">
-                    {% if rotation %}
-                    <a href="{{ url_for('orden_compra.exportar_excel', week=selected_week) }}" class="btn btn-success btn-sm fw-bold shadow-sm">
-                        <i class="fa-solid fa-file-excel me-1"></i> Exportar a Excel
-                    </a>
-                    <a href="{{ url_for('fumigacion.rotacion_detalle', rotation_id=rotation.id) }}" class="btn btn-primary btn-sm fw-bold">
-                        <i class="fa-solid fa-eye me-1"></i> Ver Rotación Completa
-                    </a>
-                    {% else %}
-                    <div class="alert alert-warning mb-0 py-2 px-3 d-inline-block">
-                        <i class="fa-solid fa-triangle-exclamation me-2"></i>
-                        <strong>No existe rotación para la Semana {{ selected_week }}</strong>
-                    </div>
-                    <a href="{{ url_for('fumigacion.rotacion_crear') }}?week={{ selected_week }}" class="btn btn-warning btn-sm fw-bold">
-                        <i class="fa-solid fa-plus me-1"></i> Crear Rotación para Semana {{ selected_week }}
-                    </a>
-                    {% endif %}
-                </div>
-            </div>
+    <!-- Inline Week Selector & Quick Actions -->
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+        <form method="GET" action="{{ url_for('orden_compra.index') }}" class="d-flex align-items-center gap-2">
+            <label class="small fw-semibold text-secondary text-nowrap mb-0"><i class="fa-solid fa-calendar-week me-1"></i>Semana:</label>
+            <select name="week" class="form-select form-select-sm" onchange="this.form.submit()" style="min-width: 170px;">
+                {% for w in week_options %}
+                <option value="{{ w.value }}" {% if w.value == selected_week %}selected{% endif %}>
+                    {{ w.label }} {% if w.is_target %}(A 15 días){% endif %}
+                </option>
+                {% endfor %}
+            </select>
         </form>
+
+        {% if rotation %}
+        <a href="{{ url_for('orden_compra.exportar_excel', week=selected_week) }}" class="btn btn-outline-success btn-sm fw-semibold" title="Exportar Requisición a Excel">
+            <i class="fa-solid fa-file-excel me-1"></i> Excel
+        </a>
+        <a href="{{ url_for('fumigacion.rotacion_detalle', rotation_id=rotation.id) }}" class="btn btn-outline-primary btn-sm fw-semibold" title="Ver detalle de la rotación semanal">
+            <i class="fa-solid fa-eye me-1"></i> Ver Rotación
+        </a>
+        {% endif %}
     </div>
 </div>
 
 {% if rotation %}
-<!-- Beds Configuration Section with Variety Summary -->
-<div class="card mb-4 shadow-sm">
-    <div class="card-header bg-light d-flex justify-content-between align-items-center flex-wrap gap-2">
-        <div>
-            <h5 class="fw-bold text-dark mb-0">
-                <i class="fa-solid fa-bed me-2 text-primary"></i>Configuración de Camas (Base del Pedido)
-            </h5>
-            <div class="text-muted small">Resumen consolidado por variedad y detalle por bloque</div>
-        </div>
-        <div class="d-flex gap-2 align-items-center">
-            <span class="badge bg-primary fs-6">{{ total_standard_beds_sum|format_number(2) }} Camas Std Totales</span>
-            <span class="badge bg-secondary fs-6">{{ total_beds_count }} Bloques/Segmentos</span>
+<!-- KPI Indicators Strip -->
+<div class="row g-2 mb-3">
+    <div class="col-6 col-md-3 col-xl">
+        <div class="kpi-tile text-center">
+            <div class="kpi-label">Semana Operativa</div>
+            <div class="kpi-value text-dark font-monospace">{{ selected_week }}</div>
         </div>
     </div>
-    <div class="card-body p-3 bg-light border-bottom">
-        <!-- Variety Summary Pills & Quick Table -->
-        <h6 class="fw-bold text-dark mb-2">
-            <i class="fa-solid fa-chart-pie text-success me-1"></i> Resumen de Camas por Variedad / Cultivo:
-        </h6>
-        {% if variety_summary_list %}
-        <div class="row g-2 mb-3">
-            {% for var in variety_summary_list %}
-            <div class="col-md-4 col-lg-3">
-                <div class="p-2 border rounded bg-white shadow-xs">
-                    <div class="d-flex justify-content-between align-items-center mb-1">
-                        <strong class="text-primary text-truncate" title="{{ var.crop_name }}">{{ var.crop_name }}</strong>
-                        <span class="badge bg-primary-subtle text-primary fw-bold">{{ var.total_std_beds|format_number(2) }} std</span>
-                    </div>
-                    <div class="d-flex justify-content-between small text-muted" style="font-size: 0.75rem;">
-                        <span>Veg: <strong class="text-success">{{ var.veg_std_beds|format_number(1) }}</strong></span>
-                        <span>Prod: <strong class="text-primary">{{ var.prod_std_beds|format_number(1) }}</strong></span>
-                        <span>Bloques: <strong>{{ var.segments_count }}</strong></span>
-                    </div>
-                </div>
-            </div>
-            {% endfor %}
+    <div class="col-6 col-md-3 col-xl">
+        <div class="kpi-tile text-center">
+            <div class="kpi-label">Camas Std Totales</div>
+            <div class="kpi-value text-primary">{{ total_standard_beds_sum|format_number(2) }}</div>
         </div>
+    </div>
+    <div class="col-6 col-md-3 col-xl">
+        <div class="kpi-tile text-center">
+            <div class="kpi-label">Bloques / Segmentos</div>
+            <div class="kpi-value text-secondary">{{ total_beds_count }}</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3 col-xl">
+        <div class="kpi-tile text-center">
+            <div class="kpi-label">Litros Estimados</div>
+            <div class="kpi-value text-dark">{{ variety_summary_list|sum(attribute='total_liters')|format_number(1) if variety_summary_list else '0.0' }} L</div>
+        </div>
+    </div>
+    <div class="col-12 col-md-12 col-xl">
+        <div class="kpi-tile text-center d-flex flex-column justify-content-center align-items-center">
+            <div class="kpi-label">Estado de Orden</div>
+            {% if requisition and requisition.status == 'APROBADO' %}
+            <span class="badge bg-success-subtle text-success border border-success fw-bold">
+                <i class="fa-solid fa-lock me-1"></i> APROBADO (Inmutable)
+            </span>
+            {% else %}
+            <span class="badge bg-warning-subtle text-dark border border-warning fw-bold">
+                <i class="fa-solid fa-clock me-1"></i> PENDIENTE
+            </span>
+            {% endif %}
+        </div>
+    </div>
+</div>
 
-        <!-- Compact Variety Table -->
-        <div class="table-responsive bg-white rounded border mb-1">
-            <table class="table table-sm table-bordered align-middle mb-0 text-center" style="font-size: 0.8rem;">
+<!-- ==================== TABLA DINÁMICA PIVOTE MULTI-MÓDULO ==================== -->
+{% if pivot_data and pivot_data.rows %}
+<div class="card shadow-xs mb-3">
+    <div class="card-header bg-white py-2 px-3 d-flex justify-content-between align-items-center flex-wrap gap-2 border-bottom">
+        <div class="d-flex align-items-center gap-2">
+            <i class="fa-solid fa-scale-balanced text-primary fs-5"></i>
+            <div>
+                <span class="fw-bold text-dark">Tabla Dinámica de Abastecimiento: Pedido 15 Días vs Ejecutado Real Finca</span>
+                <div class="text-muted small" style="font-size: 0.76rem;">Consolidación por insumo: Fumigación Foliar + Drench Suelo + Trichos. Clic en [+] para ver desglose por origen y cultivo.</div>
+            </div>
+        </div>
+        
+        <!-- Filter Pills & Search -->
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <div class="btn-group btn-group-sm" role="group">
+                <button type="button" class="btn btn-outline-secondary btn-filter-pivot-status active" data-status="ALL">Todos</button>
+                <button type="button" class="btn btn-outline-success btn-filter-pivot-status" data-status="SUPERAVIT">🟢 Superávit</button>
+                <button type="button" class="btn btn-outline-danger btn-filter-pivot-status" data-status="DEFICIT">🔴 Déficit</button>
+                <button type="button" class="btn btn-outline-secondary btn-filter-pivot-status" data-status="EXACTO">⚪ Exacto</button>
+            </div>
+            <input type="text" id="search-pivot-chem" class="form-control form-control-sm" placeholder="Buscar químico..." style="width: 150px; font-size: 0.8rem;">
+            {% if requisition and requisition.status != 'APROBADO' %}
+            <button type="button" class="btn btn-sm btn-success fw-bold py-1 px-3" id="btn-approve-order">
+                <i class="fa-solid fa-check me-1"></i> Aprobar Orden
+            </button>
+            {% elif requisition and session.get('role') == 'ADMIN' %}
+            <button type="button" class="btn btn-sm btn-outline-danger py-1" id="btn-delete-order" title="Reiniciar orden aprobada">
+                <i class="fa-solid fa-trash-can me-1"></i> Reiniciar (Admin)
+            </button>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle mb-0" id="table-pivot-chemicals" style="font-size: 0.85rem;">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width: 38px;" class="text-center"></th>
+                        <th style="width: 130px;">Producto Químico</th>
+                        <th>Nombre Comercial</th>
+                        <th style="width: 70px;" class="text-center">Unidad</th>
+                        <th class="text-end" style="width: 150px;">Comprado (15 Días)</th>
+                        <th class="text-end text-muted" style="width: 130px;" title="Fumigación Foliar + Manchas">🌿 Fumigación</th>
+                        <th class="text-end text-muted" style="width: 110px;" title="Drench Radicular y Suelo">💧 Drench</th>
+                        <th class="text-end text-muted" style="width: 110px;" title="Trichos y Biológicos">🧪 Trichos</th>
+                        <th class="text-end fw-bold" style="width: 140px;">Total Ejecutando</th>
+                        <th class="text-end" style="width: 140px;">Diferencia Global</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in pivot_data.rows %}
+                    {% set child_id = 'pivot-detail-' ~ loop.index %}
+                    <tr class="pivot-main-row" data-diff-type="{{ r.diff_type }}" data-code="{{ r.product_code|upper }}" data-name="{{ r.commercial_name|upper }}" data-child-id="{{ child_id }}">
+                        <td class="text-center p-1">
+                            {% if r.details %}
+                            <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none btn-toggle-pivot-details" data-target="{{ child_id }}" title="Ver desglose por origen y cultivo">
+                                <i class="fa-solid fa-square-plus text-primary fs-6"></i>
+                            </button>
+                            {% else %}
+                            <span class="text-muted small">&bull;</span>
+                            {% endif %}
+                        </td>
+                        <td class="fw-bold font-monospace text-primary">{{ r.product_code }}</td>
+                        <td class="fw-semibold text-dark">{{ r.commercial_name }}</td>
+                        <td class="text-center"><span class="badge bg-light text-secondary border font-monospace">{{ r.unit }}</span></td>
+                        <td class="text-end fw-semibold text-secondary font-monospace">{{ r.quantity_forecast|format_product(r.unit) }}</td>
+                        <td class="text-end text-muted font-monospace">{{ r.quantity_fumigacion|format_product(r.unit) if r.quantity_fumigacion > 0 else '-' }}</td>
+                        <td class="text-end text-muted font-monospace">{{ r.quantity_drench|format_product(r.unit) if r.quantity_drench > 0 else '-' }}</td>
+                        <td class="text-end text-muted font-monospace">{{ r.quantity_trichos|format_product(r.unit) if r.quantity_trichos > 0 else '-' }}</td>
+                        <td class="text-end fw-bold text-dark font-monospace">{{ r.total_real|format_product(r.unit) }}</td>
+                        <td class="text-end font-monospace {{ r.diff_cell_class }}" title="{{ r.status_label }}">
+                            {{ r.diff_display }}
+                        </td>
+                    </tr>
+                    {% if r.details %}
+                    <tr id="{{ child_id }}" class="pivot-child-row d-none" data-parent-code="{{ r.product_code|upper }}">
+                        <td colspan="10" class="p-2">
+                            <div class="pivot-child-box p-2 mx-2">
+                                <div class="fw-bold text-secondary small mb-1">
+                                    <i class="fa-solid fa-diagram-project text-primary me-1"></i> Desglose de Uso para <strong>{{ r.commercial_name }} ({{ r.product_code }})</strong>:
+                                </div>
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-bordered bg-white mb-0" style="font-size: 0.78rem;">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>Módulo / Origen</th>
+                                                <th>Programa / Orden</th>
+                                                <th>Cultivo / Variedad</th>
+                                                <th class="text-end">Camas Std</th>
+                                                <th class="text-end">Litros Mezcla</th>
+                                                <th class="text-end">Cantidad Asignada</th>
+                                                <th class="text-center">Unidad</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for d in r.details %}
+                                            <tr>
+                                                <td>
+                                                    <span class="badge {% if 'Foliar' in d.module %}bg-primary-subtle text-primary border border-primary{% elif 'Drench' in d.module %}bg-info-subtle text-info border border-info{% else %}bg-danger-subtle text-danger border border-danger{% endif %}">
+                                                        {{ d.module }}
+                                                    </span>
+                                                </td>
+                                                <td class="fw-semibold text-dark">{{ d.program }}</td>
+                                                <td>{{ d.crop_name }}</td>
+                                                <td class="text-end font-monospace">{{ d.beds|format_number(2) if d.beds else '-' }}</td>
+                                                <td class="text-end font-monospace">{{ d.liters|format_number(1) if d.liters else '-' }}</td>
+                                                <td class="text-end fw-bold text-primary font-monospace">{{ d.amount|format_product(d.unit) }}</td>
+                                                <td class="text-center"><span class="badge bg-light text-secondary border">{{ d.unit }}</span></td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endif %}
+                    {% endfor %}
+                </tbody>
+                <tfoot class="table-light fw-bold border-top">
+                    <tr>
+                        <td colspan="4" class="text-start text-secondary small text-uppercase">Totales Consolidados:</td>
+                        <td class="text-end text-secondary font-monospace">{{ pivot_data.totals.total_forecast|format_number(2) }}</td>
+                        <td class="text-end text-muted font-monospace">{{ pivot_data.totals.total_fumigacion|format_number(2) }}</td>
+                        <td class="text-end text-muted font-monospace">{{ pivot_data.totals.total_drench|format_number(2) }}</td>
+                        <td class="text-end text-muted font-monospace">{{ pivot_data.totals.total_trichos|format_number(2) }}</td>
+                        <td class="text-end text-dark font-monospace">{{ pivot_data.totals.total_real|format_number(2) }}</td>
+                        <td></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Beds & Variety Summary Section -->
+<div class="card shadow-xs mb-3">
+    <div class="card-header bg-white py-2 px-3 d-flex justify-content-between align-items-center border-bottom">
+        <div class="d-flex align-items-center gap-2">
+            <i class="fa-solid fa-chart-pie text-primary"></i>
+            <span class="fw-bold text-dark">Resumen de Camas por Variedad / Cultivo</span>
+        </div>
+        <span class="text-muted small" style="font-size: 0.78rem;">Base para cálculo de litrajes</span>
+    </div>
+    <div class="card-body p-0">
+        {% if variety_summary_list %}
+        <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle mb-0 text-center" style="font-size: 0.82rem;">
                 <thead class="table-light">
                     <tr>
                         <th class="text-start">Cultivo / Variedad</th>
-                        <th class="text-end" style="width: 130px;">Camas Std Totales</th>
-                        <th class="text-end" style="width: 120px;">Veg (Std)</th>
-                        <th class="text-end" style="width: 120px;">Prod (Std)</th>
+                        <th class="text-end" style="width: 140px;">Camas Std Totales</th>
+                        <th class="text-end" style="width: 130px;">Veg (Std)</th>
+                        <th class="text-end" style="width: 130px;">Prod (Std)</th>
                         <th class="text-end" style="width: 110px;">N° Bloques</th>
-                        <th class="text-end" style="width: 130px;">Litros Estimados</th>
+                        <th class="text-end" style="width: 140px;">Litros Estimados</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -149,189 +302,83 @@
                         <td class="text-end text-success fw-semibold">{{ var.veg_std_beds|format_number(2) }}</td>
                         <td class="text-end text-primary fw-semibold">{{ var.prod_std_beds|format_number(2) }}</td>
                         <td class="text-end text-muted">{{ var.segments_count }}</td>
-                        <td class="text-end fw-bold text-dark">{{ var.total_liters|format_number(1) }} L</td>
+                        <td class="text-end fw-semibold text-dark">{{ var.total_liters|format_number(1) }} L</td>
                     </tr>
                     {% endfor %}
                 </tbody>
-                <tfoot class="table-secondary fw-bold">
+                <tfoot class="table-light fw-bold border-top">
                     <tr>
-                        <td class="text-start">TOTAL GENERAL:</td>
+                        <td class="text-start text-secondary small text-uppercase">Total General:</td>
                         <td class="text-end text-primary">{{ total_standard_beds_sum|format_number(2) }}</td>
-                        <td class="text-end text-success">
-                            {{ variety_summary_list|sum(attribute='veg_std_beds')|format_number(2) }}
-                        </td>
-                        <td class="text-end text-primary">
-                            {{ variety_summary_list|sum(attribute='prod_std_beds')|format_number(2) }}
-                        </td>
-                        <td class="text-end">{{ total_beds_count }}</td>
-                        <td class="text-end text-dark">
-                            {{ variety_summary_list|sum(attribute='total_liters')|format_number(1) }} L
-                        </td>
+                        <td class="text-end text-success">{{ variety_summary_list|sum(attribute='veg_std_beds')|format_number(2) }}</td>
+                        <td class="text-end text-primary">{{ variety_summary_list|sum(attribute='prod_std_beds')|format_number(2) }}</td>
+                        <td class="text-end text-secondary">{{ total_beds_count }}</td>
+                        <td class="text-end text-dark">{{ variety_summary_list|sum(attribute='total_liters')|format_number(1) }} L</td>
                     </tr>
                 </tfoot>
             </table>
         </div>
         {% else %}
-        <div class="text-muted small">No hay camas calculadas para mostrar el resumen por variedad.</div>
+        <div class="text-muted small p-3 text-center">No hay camas calculadas para mostrar el resumen por variedad.</div>
         {% endif %}
-    </div>
-
-    <!-- Detailed Bed Configuration Table -->
-    <div class="card-body p-0">
-        <div class="p-2 bg-white border-bottom small fw-bold text-muted d-flex justify-content-between align-items-center">
-            <span><i class="fa-solid fa-list me-1"></i> Detalle Bloque a Bloque:</span>
-            <span class="text-muted fw-normal" style="font-size: 0.75rem;">Scroll para ver todos los bloques</span>
-        </div>
-        <div class="table-responsive" style="max-height: 450px;">
-            <table class="table table-sm table-hover align-middle mb-0 bed-config-table">
-                <thead class="sticky-top">
-                    <tr>
-                        <th style="width: 80px;">Zona</th>
-                        <th style="width: 80px;">Bloque</th>
-                        <th style="width: 50px;">Sufijo</th>
-                        <th style="width: 120px;">Cultivo / Variedad</th>
-                        <th style="width: 60px;">Edad</th>
-                        <th style="width: 130px;">Camas (Ini - Fin)</th>
-                        <th style="width: 85px;">Camas Std</th>
-                        <th style="width: 80px;">L/Cama</th>
-                        <th style="width: 120px;">Estado</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% if bed_configuration and bed_configuration is iterable and bed_configuration is not string %}
-                        {% for seg in bed_configuration %}
-                        {% if seg is mapping %}
-                        <tr class="{% if seg.phenological_stage == 'VEGETATIVO' %}row-state-veg{% else %}row-state-prod{% endif %}">
-                            <td class="text-center font-monospace small">{{ seg.get('zone', '') }}</td>
-                            <td class="text-center fw-bold">{{ seg.get('block_name', '') }}</td>
-                            <td class="text-center fw-bold text-primary">{{ seg.get('suffix', '') }}</td>
-                            <td class="fw-semibold">{{ seg.get('crop_name', '') }}</td>
-                            <td class="text-center">{{ seg.get('real_age', '') }}</td>
-                            <td class="text-center">{{ seg.get('bed_start', '') }} - {{ seg.get('bed_end', '') }}</td>
-                            <td class="text-end fw-bold">{{ seg.get('standard_beds', 0)|format_number(2) }}</td>
-                            <td class="text-end">{{ seg.get('liters_per_bed', 0)|format_number(1) }}</td>
-                            <td class="text-center">
-                                <span class="badge {% if seg.get('phenological_stage') == 'VEGETATIVO' %}bg-success{% else %}bg-primary{% endif %}">
-                                    {{ seg.get('phenological_stage', 'N/A') }}
-                                </span>
-                            </td>
-                        </tr>
-                        {% endif %}
-                        {% endfor %}
-                    {% else %}
-                        <tr>
-                            <td colspan="9" class="text-center text-muted py-4">
-                                <i class="fa-solid fa-info-circle me-2"></i>
-                                No hay configuración de camas guardada. Ve a la rotación y configura las camas en "Revisión y Calibración".
-                            </td>
-                        </tr>
-                    {% endif %}
-                </tbody>
-            </table>
-        </div>
     </div>
 </div>
 
-<!-- Budget Adjustments Section -->
-<div class="card mb-4 shadow-sm border-warning border-2">
-    <div class="card-header bg-warning bg-opacity-10 d-flex justify-content-between align-items-center">
-        <h5 class="fw-bold text-dark mb-0">
-            <i class="fa-solid fa-calculator me-2 text-warning"></i>Ajustes de Presupuesto (Camas Adicionales)
-        </h5>
-        <span class="badge bg-warning text-dark">Inflado de Camas por Siembra/Poda</span>
+<!-- Budget Adjustments Section (Siembras y Podas) -->
+<div class="card shadow-xs mb-3">
+    <div class="card-header bg-white py-2 px-3 d-flex justify-content-between align-items-center border-bottom flex-wrap gap-2">
+        <div class="d-flex align-items-center gap-2">
+            <i class="fa-solid fa-calculator text-warning"></i>
+            <span class="fw-bold text-dark">Ajustes de Presupuesto (Camas de Siembra / Poda)</span>
+        </div>
+        <span class="badge bg-light text-muted border small" style="font-size: 0.72rem;">Opcional: Inflado Proyectado</span>
     </div>
-    <div class="card-body">
-        <div class="alert alert-info mb-3">
-            <i class="fa-solid fa-lightbulb me-2"></i>
-            <strong>¿Para qué sirve esto?</strong> Si el plano de cultivo está atrasado y no tienes las camas de las siembras/podas recientes, 
-            puedes agregar camas de presupuesto aquí para que se sumen al pedido. Ejemplo: si vas a sembrar 50 camas de MOONWALK de 2 semanas, agrégalas aquí.
+    <div class="card-body p-3">
+        <div class="text-muted small mb-3" style="font-size: 0.8rem;">
+            <i class="fa-solid fa-circle-info text-primary me-1"></i>
+            Agrega camas proyectadas (siembras/podas) que aún no consten en el plano de cultivo para sumarlas al pedido de compra.
         </div>
         
         <form id="form-budget-adjustments">
             <div class="table-responsive">
-                <table class="table table-sm table-bordered align-middle mb-3" id="table-budget">
+                <table class="table table-sm table-bordered align-middle mb-2" id="table-budget" style="font-size: 0.82rem;">
                     <thead class="table-light">
                         <tr>
-                            <th style="width: 150px;">Cultivo/Variedad</th>
-                            <th style="width: 80px;">Edad (sem)</th>
-                            <th style="width: 120px;">Estado</th>
-                            <th style="width: 140px;">Camas Presupuesto</th>
-                            <th style="width: 200px;">Motivo</th>
-                            <th style="width: 80px;">Acción</th>
+                            <th style="width: 180px;">Cultivo / Variedad</th>
+                            <th style="width: 90px;" class="text-center">Edad (sem)</th>
+                            <th style="width: 140px;">Estado</th>
+                            <th style="width: 130px;" class="text-end">Camas Presupuesto</th>
+                            <th>Motivo</th>
+                            <th style="width: 50px;" class="text-center">Acción</th>
                         </tr>
                     </thead>
                     <tbody id="budget-rows">
-                        <!-- Rows will be added dynamically -->
+                        <!-- Dynamic budget rows -->
                     </tbody>
                 </table>
             </div>
             
-            <div class="d-flex gap-2 justify-content-end">
-                <button type="button" class="btn btn-outline-primary btn-sm" id="btn-add-budget-row">
-                    <i class="fa-solid fa-plus me-1"></i> Agregar Fila de Presupuesto
+            <div class="d-flex gap-2 justify-content-end align-items-center pt-1">
+                <button type="button" class="btn btn-outline-primary btn-sm py-1" id="btn-add-budget-row">
+                    <i class="fa-solid fa-plus me-1"></i> Agregar Fila
                 </button>
-                <button type="button" class="btn btn-warning btn-sm fw-bold" id="btn-recalculate">
-                    <i class="fa-solid fa-calculator me-1"></i> Recalcular Pedido con Presupuesto
+                <button type="button" class="btn btn-warning text-dark btn-sm fw-bold py-1 px-3" id="btn-recalculate">
+                    <i class="fa-solid fa-calculator me-1"></i> Recalcular Pedido
                 </button>
             </div>
         </form>
     </div>
 </div>
 
-<!-- Requisition Summary -->
-{% if requisition %}
-<div class="card shadow-sm">
-    <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
-        <h5 class="fw-bold mb-0"><i class="fa-solid fa-clipboard-check me-2"></i>Requisición Calculada a 15 Días</h5>
-        <div class="d-flex gap-2 align-items-center">
-            {% if requisition.status == 'APROBADO' %}
-            <span class="badge bg-light text-success border border-success fs-6">
-                <i class="fa-solid fa-check-circle me-1"></i> APROBADO
-            </span>
-            {% else %}
-            <span class="badge bg-light text-warning border border-warning fs-6">
-                <i class="fa-solid fa-clock me-1"></i> PENDIENTE
-            </span>
-            <button type="button" class="btn btn-sm btn-light fw-bold" id="btn-approve-order">
-                <i class="fa-solid fa-check me-1"></i> Aprobar Orden
-            </button>
-            {% endif %}
-        </div>
-    </div>
-    <div class="card-body p-0">
-        <div class="table-responsive">
-            <table class="table table-sm table-bordered align-middle mb-0">
-                <thead class="table-light">
-                    <tr>
-                        <th>Código</th>
-                        <th>Nombre Comercial</th>
-                        <th>Unidad</th>
-                        <th class="text-end">Cantidad Necesaria</th>
-                        <th>Plaga / Blanco</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for item in requisition.items %}
-                    <tr>
-                        <td class="fw-bold text-primary">{{ item.product_code }}</td>
-                        <td>{{ item.commercial_name }}</td>
-                        <td>{{ item.unit }}</td>
-                        <td class="text-end fw-bold text-success">{{ item.quantity_forecast|format_product(item.unit) }}</td>
-                        <td class="small text-muted">{{ item.pest or '-' }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
-</div>
-{% endif %}
-
 {% else %}
-<div class="alert alert-warning shadow-sm">
-    <i class="fa-solid fa-exclamation-triangle me-2"></i>
-    <strong>No hay rotación creada</strong> para la semana {{ selected_week }}. 
-    <a href="{{ url_for('fumigacion.rotacion_crear') }}" class="alert-link">Crear rotación ahora</a>
+<div class="alert alert-warning shadow-xs py-3">
+    <i class="fa-solid fa-triangle-exclamation me-2"></i>
+    <strong>No existe rotación para la Semana {{ selected_week }}.</strong>
+    <div class="mt-2">
+        <a href="{{ url_for('fumigacion.rotacion_crear') }}?week={{ selected_week }}" class="btn btn-warning btn-sm fw-bold">
+            <i class="fa-solid fa-plus me-1"></i> Crear Rotación para Semana {{ selected_week }}
+        </a>
+    </div>
 </div>
 {% endif %}
 
@@ -480,6 +527,35 @@ document.getElementById('btn-approve-order')?.addEventListener('click', function
     });
 });
 
+// Delete / Reset order (Admin only)
+document.getElementById('btn-delete-order')?.addEventListener('click', function() {
+    if (!confirm('⚠️ ¿Estás seguro de que deseas ELIMINAR / REINICIAR esta Orden de Compra aprobada?\n\nEsta acción solo la puede realizar el Administrador para permitir volver a generar la orden de compra desde cero para la semana {{ selected_week }}.')) return;
+
+    fetch('{{ url_for("orden_compra.eliminar_orden") }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            week: '{{ selected_week }}',
+            rotation_id: {{ rotation.id if rotation else 'null' }}
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('✓ ' + data.message);
+            window.location.reload();
+        } else {
+            alert('Error: ' + (data.error || 'Error desconocido'));
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error al eliminar la orden');
+    });
+});
+
 // Load existing budget adjustments
 function loadExistingBudgetAdjustments() {
     {% if requisition and requisition.budget_adjustments_json %}
@@ -536,6 +612,74 @@ function loadExistingBudgetAdjustments() {
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
     loadExistingBudgetAdjustments();
+
+    // Toggle child row details in dynamic pivot table
+    document.querySelectorAll('.btn-toggle-pivot-details').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            const targetId = this.getAttribute('data-target');
+            const targetRow = document.getElementById(targetId);
+            if (targetRow) {
+                if (targetRow.classList.contains('d-none')) {
+                    targetRow.classList.remove('d-none');
+                    this.innerHTML = '<i class="fa-solid fa-square-minus text-secondary fs-6"></i>';
+                } else {
+                    targetRow.classList.add('d-none');
+                    this.innerHTML = '<i class="fa-solid fa-square-plus text-primary fs-6"></i>';
+                }
+            }
+        });
+    });
+
+    // Filter dynamic pivot table by Status
+    let activeFilter = 'ALL';
+    document.querySelectorAll('.btn-filter-pivot-status').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('.btn-filter-pivot-status').forEach(b => {
+                b.classList.remove('active');
+                if (b.getAttribute('data-status') === 'SUPERAVIT') b.className = 'btn btn-outline-success btn-filter-pivot-status';
+                else if (b.getAttribute('data-status') === 'DEFICIT') b.className = 'btn btn-outline-danger btn-filter-pivot-status';
+                else b.className = 'btn btn-outline-secondary btn-filter-pivot-status';
+            });
+
+            this.classList.add('active');
+            if (this.getAttribute('data-status') === 'SUPERAVIT') this.className = 'btn btn-success btn-filter-pivot-status active';
+            else if (this.getAttribute('data-status') === 'DEFICIT') this.className = 'btn btn-danger btn-filter-pivot-status active';
+            else this.className = 'btn btn-secondary btn-filter-pivot-status active';
+
+            activeFilter = this.getAttribute('data-status');
+            applyPivotFilters();
+        });
+    });
+
+    // Real-time search in dynamic pivot table
+    const searchInput = document.getElementById('search-pivot-chem');
+    if (searchInput) {
+        searchInput.addEventListener('input', function() {
+            applyPivotFilters();
+        });
+    }
+
+    function applyPivotFilters() {
+        const query = (document.getElementById('search-pivot-chem')?.value || '').trim().toUpperCase();
+        document.querySelectorAll('.pivot-main-row').forEach(row => {
+            const diffType = row.getAttribute('data-diff-type') || '';
+            const code = row.getAttribute('data-code') || '';
+            const name = row.getAttribute('data-name') || '';
+            const childId = row.getAttribute('data-child-id');
+            const childRow = document.getElementById(childId);
+
+            const matchesStatus = (activeFilter === 'ALL' || diffType === activeFilter);
+            const matchesSearch = (!query || code.includes(query) || name.includes(query));
+
+            if (matchesStatus && matchesSearch) {
+                row.style.display = '';
+            } else {
+                row.style.display = 'none';
+                if (childRow) childRow.classList.add('d-none');
+            }
+        });
+    }
 });
 </script>
 {% endblock %}

@@ -66,6 +66,12 @@
     opacity: 0.4;
     transform: scale(0.95);
 }
+.prod-badge-tag.drag-over {
+    border-color: #0284c7 !important;
+    background-color: #bae6fd !important;
+    transform: scale(1.06);
+    box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.5);
+}
 .prod-badge-tag .btn-remove-tag {
     color: #0369a1;
     margin-left: 5px;
@@ -168,7 +174,7 @@
             <!-- Agronomist -->
             <div class="col-md-3">
                 <label class="form-label fw-bold small text-dark mb-1">Agrónomo Responsable</label>
-                <input type="text" id="rotation-agronomist" class="form-control form-control-sm" value="{{ rotation.created_by if rotation else 'Agrónomo Responsable' }}">
+                <input type="text" id="rotation-agronomist" class="form-control form-control-sm" value="{{ rotation.created_by if (rotation and rotation.created_by) else (current_user.full_name or current_user.username or session.get('full_name') or session.get('username') or 'Agrónomo Responsable') }}">
             </div>
 
             <!-- Status Indicator -->
@@ -399,7 +405,7 @@ function renderMatrixTable() {
                 box.dataset.crop = crop.name;
                 box.dataset.stage = stage;
 
-                // Drag and drop listeners on cell box
+                // Drag and drop listeners on cell box (for empty space drop)
                 box.addEventListener('dragover', function(e) {
                     e.preventDefault();
                     box.classList.add('drag-over');
@@ -410,46 +416,58 @@ function renderMatrixTable() {
                 box.addEventListener('drop', function(e) {
                     e.preventDefault();
                     box.classList.remove('drag-over');
-                    if (draggedItemData) {
-                        const targetRoundIdx = parseInt(box.dataset.roundIdx);
-                        const targetCrop = box.dataset.crop;
-                        const targetStage = box.dataset.stage;
+                    if (!draggedItemData) return;
 
-                        const itemToClone = draggedItemData.itemObj;
-                        
-                        // Check if product already exists in target cell to prevent duplicates
-                        const alreadyExists = roundsState[targetRoundIdx].items.some(it => 
-                            it.crop_name === targetCrop && 
-                            it.phenological_stage === targetStage &&
-                            (it.product_id === itemToClone.product_id || it.product_code === itemToClone.product_code)
-                        );
-                        
-                        // Only add if product doesn't already exist in this cell
-                        if (!alreadyExists) {
-                            const cellItems = roundsState[targetRoundIdx].items.filter(it => it.crop_name === targetCrop && it.phenological_stage === targetStage);
-                            
-                            roundsState[targetRoundIdx].items.push({
-                                _uid: 'uid_' + (uidCounter++) + '_' + Math.random().toString(36).substring(2, 8),
-                                crop_name: targetCrop,
-                                phenological_stage: targetStage,
-                                product_id: itemToClone.product_id,
-                                product_code: itemToClone.product_code,
-                                dose_applied: itemToClone.dose_applied,
-                                dose_unit: itemToClone.dose_unit,
-                                order_index: cellItems.length
-                            });
-                        } else {
-                            // Show brief notification that product already exists
-                            const notification = document.createElement('div');
-                            notification.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #fbbf24; color: #78350f; padding: 12px 20px; border-radius: 8px; z-index: 9999; font-weight: 600; box-shadow: 0 4px 6px rgba(0,0,0,0.1);';
-                            notification.innerHTML = '<i class="fa-solid fa-triangle-exclamation me-2"></i>Este producto ya está en esta celda';
-                            document.body.appendChild(notification);
-                            setTimeout(() => notification.remove(), 2000);
-                        }
+                    const sourceRoundIdx = draggedItemData.roundIdx;
+                    const sourceCrop = draggedItemData.crop;
+                    const sourceStage = draggedItemData.stage;
+                    const sourceItem = draggedItemData.itemObj;
 
+                    const targetRoundIdx = parseInt(box.dataset.roundIdx);
+                    const targetCrop = box.dataset.crop;
+                    const targetStage = box.dataset.stage;
+
+                    if (sourceRoundIdx === targetRoundIdx && sourceCrop === targetCrop && sourceStage === targetStage) {
+                        // Dragged onto empty box area within same cell -> move to the end
+                        let cellItems = roundsState[targetRoundIdx].items.filter(it => it.crop_name === targetCrop && it.phenological_stage === targetStage);
+                        cellItems.sort((a, b) => (a.order_index || 0) - (b.order_index || 0));
+                        cellItems = cellItems.filter(it => it._uid !== sourceItem._uid);
+                        cellItems.push(sourceItem);
+                        cellItems.forEach((it, idx) => { it.order_index = idx; });
                         draggedItemData = null;
                         renderMatrixTable();
+                        return;
                     }
+
+                    // Dragged to a different cell
+                    const alreadyExists = roundsState[targetRoundIdx].items.some(it => 
+                        it.crop_name === targetCrop && 
+                        it.phenological_stage === targetStage &&
+                        (it.product_id === sourceItem.product_id || it.product_code === sourceItem.product_code)
+                    );
+
+                    if (!alreadyExists) {
+                        const cellItems = roundsState[targetRoundIdx].items.filter(it => it.crop_name === targetCrop && it.phenological_stage === targetStage);
+                        roundsState[targetRoundIdx].items.push({
+                            _uid: 'uid_' + (uidCounter++) + '_' + Math.random().toString(36).substring(2, 8),
+                            crop_name: targetCrop,
+                            phenological_stage: targetStage,
+                            product_id: sourceItem.product_id,
+                            product_code: sourceItem.product_code,
+                            dose_applied: sourceItem.dose_applied,
+                            dose_unit: sourceItem.dose_unit,
+                            order_index: cellItems.length
+                        });
+                    } else {
+                        const notification = document.createElement('div');
+                        notification.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #fbbf24; color: #78350f; padding: 12px 20px; border-radius: 8px; z-index: 9999; font-weight: 600; box-shadow: 0 4px 6px rgba(0,0,0,0.1);';
+                        notification.innerHTML = '<i class="fa-solid fa-triangle-exclamation me-2"></i>Este producto ya está en esta celda';
+                        document.body.appendChild(notification);
+                        setTimeout(() => notification.remove(), 2000);
+                    }
+
+                    draggedItemData = null;
+                    renderMatrixTable();
                 });
 
                 const cellItems = r.items.filter(it => it.crop_name === crop.name && it.phenological_stage === stage);
@@ -459,7 +477,7 @@ function renderMatrixTable() {
                     const tag = document.createElement('span');
                     tag.className = 'prod-badge-tag';
                     tag.draggable = true;
-                    tag.title = `Arrastrar para copiar/mover - ${it.product_code} (${it.dose_applied} ${it.dose_unit}/L)`;
+                    tag.title = `Arrastrar para reordenar o mover - ${it.product_code} (${it.dose_applied} ${it.dose_unit}/L)`;
                     tag.innerHTML = `
                         <i class="fa-solid fa-grip-vertical text-muted me-1" style="font-size: 0.7rem;"></i>
                         ${it.product_code}
@@ -468,6 +486,7 @@ function renderMatrixTable() {
 
                     // Dragstart on badge
                     tag.addEventListener('dragstart', function(e) {
+                        e.stopPropagation();
                         tag.classList.add('dragging');
                         draggedItemData = {
                             roundIdx: rIdx,
@@ -476,10 +495,106 @@ function renderMatrixTable() {
                             itemObj: it
                         };
                         e.dataTransfer.setData('text/plain', it.product_code);
+                        e.dataTransfer.effectAllowed = 'move';
                     });
 
-                    tag.addEventListener('dragend', function() {
+                    tag.addEventListener('dragend', function(e) {
                         tag.classList.remove('dragging');
+                        document.querySelectorAll('.prod-badge-tag').forEach(t => t.classList.remove('drag-over'));
+                        draggedItemData = null;
+                    });
+
+                    // Dragover on badge for reordering
+                    tag.addEventListener('dragover', function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (draggedItemData && draggedItemData.itemObj._uid !== it._uid) {
+                            tag.classList.add('drag-over');
+                        }
+                    });
+
+                    tag.addEventListener('dragleave', function(e) {
+                        tag.classList.remove('drag-over');
+                    });
+
+                    // Drop on badge: reorder position
+                    tag.addEventListener('drop', function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        tag.classList.remove('drag-over');
+                        if (!draggedItemData) return;
+
+                        const sourceRoundIdx = draggedItemData.roundIdx;
+                        const sourceCrop = draggedItemData.crop;
+                        const sourceStage = draggedItemData.stage;
+                        const sourceItem = draggedItemData.itemObj;
+
+                        const targetRoundIdx = rIdx;
+                        const targetCrop = crop.name;
+                        const targetStage = stage;
+                        const targetItem = it;
+
+                        const rect = tag.getBoundingClientRect();
+                        const isBefore = (e.clientX < (rect.left + rect.width / 2));
+
+                        if (sourceRoundIdx === targetRoundIdx && sourceCrop === targetCrop && sourceStage === targetStage) {
+                            // Reorder within the same cell
+                            if (sourceItem._uid === targetItem._uid) return;
+
+                            let itemsInCell = roundsState[targetRoundIdx].items.filter(item => item.crop_name === targetCrop && item.phenological_stage === targetStage);
+                            itemsInCell.sort((a, b) => (a.order_index || 0) - (b.order_index || 0));
+
+                            // Remove sourceItem from array
+                            itemsInCell = itemsInCell.filter(item => item._uid !== sourceItem._uid);
+
+                            // Find target index and insert before or after
+                            const targetIdx = itemsInCell.findIndex(item => item._uid === targetItem._uid);
+                            const insertIdx = isBefore ? targetIdx : targetIdx + 1;
+                            itemsInCell.splice(insertIdx, 0, sourceItem);
+
+                            // Update order_index sequentially
+                            itemsInCell.forEach((item, idx) => {
+                                item.order_index = idx;
+                            });
+
+                            draggedItemData = null;
+                            renderMatrixTable();
+                        } else {
+                            // Dragging to a different cell over a tag
+                            const alreadyExists = roundsState[targetRoundIdx].items.some(item => 
+                                item.crop_name === targetCrop && 
+                                item.phenological_stage === targetStage &&
+                                (item.product_id === sourceItem.product_id || item.product_code === sourceItem.product_code)
+                            );
+
+                            if (!alreadyExists) {
+                                let itemsInCell = roundsState[targetRoundIdx].items.filter(item => item.crop_name === targetCrop && item.phenological_stage === targetStage);
+                                itemsInCell.sort((a, b) => (a.order_index || 0) - (b.order_index || 0));
+
+                                const newItem = {
+                                    _uid: 'uid_' + (uidCounter++) + '_' + Math.random().toString(36).substring(2, 8),
+                                    crop_name: targetCrop,
+                                    phenological_stage: targetStage,
+                                    product_id: sourceItem.product_id,
+                                    product_code: sourceItem.product_code,
+                                    dose_applied: sourceItem.dose_applied,
+                                    dose_unit: sourceItem.dose_unit,
+                                    order_index: 0
+                                };
+
+                                const targetIdx = itemsInCell.findIndex(item => item._uid === targetItem._uid);
+                                const insertIdx = isBefore ? targetIdx : targetIdx + 1;
+                                itemsInCell.splice(insertIdx, 0, newItem);
+
+                                itemsInCell.forEach((item, idx) => {
+                                    item.order_index = idx;
+                                });
+
+                                roundsState[targetRoundIdx].items.push(newItem);
+                                draggedItemData = null;
+                                renderMatrixTable();
+                            }
+                        }
                     });
 
                     box.appendChild(tag);
