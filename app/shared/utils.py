@@ -146,3 +146,26 @@ def get_toxicological_color_info(cat: str) -> dict:
         return {'name': 'VERDE', 'bg': '#22c55e', 'text': '#ffffff', 'border': '#15803d', 'label': 'IV - Verde'}
     else:
         return {'name': '', 'bg': 'transparent', 'text': '#000000', 'border': '#cccccc', 'label': c}
+
+def get_crop_category(crop_name: str, crop_obj=None) -> str:
+    """
+    Returns the farm operational printing and warehouse weighing group:
+    - 'GYPSOPHILA': Gypsophila, Xlence, Billion Lights, etc.
+    - 'PRODUCTOS_NUEVOS': Variedades / Productos Nuevos (Solidago, Verónica, Hypericum, Sunflower, Ruscus, Rumex, etc.)
+    - 'PIV': Propagación / Invernadero Vegetativo / PIV
+    """
+    if crop_obj and getattr(crop_obj, 'category', None):
+        return crop_obj.category
+
+    if not crop_name:
+        return 'PRODUCTOS_NUEVOS'
+
+    cn = str(crop_name).strip().upper()
+
+    if any(k in cn for k in ['GYPSO', 'GYPSOPHILA', 'XLENCE', 'BILLION']):
+        return 'GYPSOPHILA'
+    elif any(k in cn for k in ['PIV', 'PROPAGACION', 'PROPAGACIÓN', 'ENRAIZ', 'INVERNADERO']):
+        return 'PIV'
+    else:
+        return 'PRODUCTOS_NUEVOS'
+

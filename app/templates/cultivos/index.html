@@ -26,6 +26,7 @@
                 <thead class="table-light">
                     <tr>
                         <th>Nombre Cultivo</th>
+                        <th>Grupo de Impresión / Pesaje</th>
                         <th>Alias y Variaciones</th>
                         <th>Rango Vegetativo</th>
                         <th>Rango Productivo</th>
@@ -38,6 +39,15 @@
                     {% for c in crops %}
                     <tr class="{% if not c.is_active %}table-secondary opacity-75{% endif %}">
                         <td class="fw-bold text-dark fs-6">{{ c.name }}</td>
+                        <td>
+                            {% if c.category == 'GYPSOPHILA' %}
+                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-1"><i class="fa-solid fa-seedling me-1"></i>🌸 Gypsophila</span>
+                            {% elif c.category == 'PIV' %}
+                            <span class="badge bg-info-subtle text-info border border-info-subtle px-2 py-1"><i class="fa-solid fa-leaf me-1"></i>🌱 PIV</span>
+                            {% else %}
+                            <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1"><i class="fa-solid fa-spa me-1"></i>🌿 Prod. Nuevos / Var.</span>
+                            {% endif %}
+                        </td>
                         <td>
                             {% for a in c.aliases %}
                             <span class="badge bg-light text-dark border me-1">{{ a }}</span>

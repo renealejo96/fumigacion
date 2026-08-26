@@ -44,6 +44,20 @@ def create_app(config_class=Config):
     def filter_is_solid(unit):
         return is_solid_unit(unit)
 
+    @app.template_filter('crop_category')
+    def filter_crop_category(crop_name):
+        from app.shared.utils import get_crop_category
+        return get_crop_category(crop_name)
+
+    # Safe dynamic column migrations
+    with app.app_context():
+        try:
+            from sqlalchemy import text
+            db.session.execute(text("ALTER TABLE crops ADD COLUMN category VARCHAR(50) DEFAULT 'PRODUCTOS_NUEVOS'"))
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+
     # Register blueprints
     from app.modules.auth.routes import auth_bp
     from app.modules.orden_compra.routes import orden_compra_bp

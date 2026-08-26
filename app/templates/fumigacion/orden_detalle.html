@@ -202,13 +202,26 @@ tr {
         {% endif %}
     </div>
     <div class="d-flex align-items-center gap-2 flex-wrap">
+        <!-- Cultivo / Grupo Filter Selector -->
+        <div class="d-flex align-items-center gap-1 bg-white p-1 border rounded shadow-sm">
+            <label for="select-print-category" class="small fw-bold text-muted text-nowrap px-1">
+                <i class="fa-solid fa-seedling text-success me-1"></i> Cultivo / Grupo:
+            </label>
+            <select id="select-print-category" class="form-select form-select-sm fw-bold border-success" style="min-width: 220px;">
+                <option value="ALL">📋 Todos los Cultivos (Completo)</option>
+                <option value="GYPSOPHILA">🌸 Solo GYPSOPHILA</option>
+                <option value="PRODUCTOS_NUEVOS">🌿 Solo PRODUCTOS NUEVOS (Variedades)</option>
+                <option value="PIV">🌱 Solo PIV (Propagación / Invernadero)</option>
+            </select>
+        </div>
+
         <!-- Operator Filter Selector -->
         <div class="d-flex align-items-center gap-1 bg-white p-1 border rounded shadow-sm">
             <label for="select-print-operator" class="small fw-bold text-muted text-nowrap px-1">
                 <i class="fa-solid fa-user-shield text-primary me-1"></i> Operario:
             </label>
-            <select id="select-print-operator" class="form-select form-select-sm fw-bold border-primary" style="min-width: 220px;">
-                <option value="ALL">📋 Todos los Operarios (Orden Completa)</option>
+            <select id="select-print-operator" class="form-select form-select-sm fw-bold border-primary" style="min-width: 200px;">
+                <option value="ALL">📋 Todos los Operarios</option>
                 {% set distinct_ops = [] %}
                 {% for d in order.details %}
                     {% if d.operator and d.operator not in distinct_ops %}
@@ -221,14 +234,25 @@ tr {
             </select>
         </div>
 
-        <!-- Print Button -->
-        <button type="button" class="btn btn-dark btn-sm fw-bold shadow-sm" onclick="executePrintOrder({{ order.id }});">
-            <i class="fa-solid fa-print me-1 text-warning"></i> Imprimir Programa Oficial
-        </button>
+        <!-- Quick Print Buttons -->
+        <div class="btn-group btn-group-sm shadow-sm" role="group">
+            <button type="button" class="btn btn-outline-primary fw-bold" onclick="setCategoryAndPrint('GYPSOPHILA');" title="Imprimir solo Gypsophila">
+                🌸 Gypsophila
+            </button>
+            <button type="button" class="btn btn-outline-success fw-bold" onclick="setCategoryAndPrint('PRODUCTOS_NUEVOS');" title="Imprimir Solidago, Verónica, Hypericum, etc.">
+                🌿 Prod. Nuevos
+            </button>
+            <button type="button" class="btn btn-outline-info fw-bold" onclick="setCategoryAndPrint('PIV');" title="Imprimir PIV">
+                🌱 PIV
+            </button>
+            <button type="button" class="btn btn-dark fw-bold" onclick="executePrintOrder({{ order.id }});" title="Imprimir con los filtros activos">
+                <i class="fa-solid fa-print text-warning me-1"></i> Imprimir
+            </button>
+        </div>
 
         <!-- Excel Export -->
         <a href="{{ url_for('fumigacion.orden_exportar_excel', order_id=order.id) }}" class="btn btn-success btn-sm fw-bold shadow-sm">
-            <i class="fa-solid fa-file-excel me-1"></i> Descargar Excel Bodega
+            <i class="fa-solid fa-file-excel me-1"></i> Excel Bodega
         </a>
 
         <!-- Status Change Dropdown -->
@@ -359,7 +383,7 @@ tr {
                 <tbody class="block-group" data-zone="{{ z_info.zone_name }}" data-block="{{ b_info.block_name }}">
                     {% for d in b_info.rows %}
                     {% set cinfo = d.toxicological_color %}
-                    <tr class="order-detail-row" data-zone="{{ z_info.zone_name }}" data-operator="{{ d.operator }}" data-std-beds="{{ d.standard_beds }}" data-liters="{{ d.total_liters }}" data-prod-code="{{ d.product_code }}" data-prod-amt="{{ d.product_amount }}" data-unit="{{ d.unit }}" data-is-first-in-block="{{ '1' if loop.first else '0' }}">
+                    <tr class="order-detail-row" data-zone="{{ z_info.zone_name }}" data-operator="{{ d.operator }}" data-crop="{{ d.crop_name }}" data-crop-category="{{ d.crop_name|crop_category }}" data-std-beds="{{ d.standard_beds }}" data-liters="{{ d.total_liters }}" data-prod-code="{{ d.product_code }}" data-prod-amt="{{ d.product_amount }}" data-unit="{{ d.unit }}" data-is-first-in-block="{{ '1' if loop.first else '0' }}">
                         <td class="text-center font-monospace">{{ d.round_name|replace('Vuelta ', 'V')|replace('VUELTA ', 'V')|replace('vuelta ', 'V') }}</td>
                         <td class="text-center">{{ d.scheduled_day[:3] if d.scheduled_day else '' }}</td>
                         <td class="text-center small">{{ d.scheduled_date.strftime('%d/%m') if d.scheduled_date else '' }}</td>
@@ -531,8 +555,9 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Interactive Operator Filtering & Live Totals + Zone Subtotals Recalculation
+    // Interactive Operator & Crop Category Filtering & Live Totals + Zone Subtotals Recalculation
     const operatorSelect = document.getElementById('select-print-operator');
+    const categorySelect = document.getElementById('select-print-category');
     const subtitleHeader = document.getElementById('doc-subtitle-header');
     const sigOperator = document.getElementById('sig-operator-text');
     const tfootBeds = document.getElementById('tfoot-total-beds');
@@ -546,140 +571,165 @@ document.addEventListener('DOMContentLoaded', function() {
         return val.toFixed(1);
     }
 
-    if (operatorSelect) {
-        operatorSelect.addEventListener('change', function() {
-            const selectedOp = this.value;
-            const blockGroups = document.querySelectorAll('#table-main-order tbody.block-group');
-            const zoneSubtotalTbodies = document.querySelectorAll('#table-main-order tbody.zone-subtotal-tbody');
+    function applyOrderFilters() {
+        const selectedOp = operatorSelect ? operatorSelect.value : 'ALL';
+        const selectedCat = categorySelect ? categorySelect.value : 'ALL';
+        const blockGroups = document.querySelectorAll('#table-main-order tbody.block-group');
+        const zoneSubtotalTbodies = document.querySelectorAll('#table-main-order tbody.zone-subtotal-tbody');
+        
+        let totalBedsGeneral = 0;
+        let totalLitersGeneral = 0;
+        let productTotals = {};
+        let zoneTotals = {};
+
+        // Initialize zone counters
+        zoneSubtotalTbodies.forEach(zt => {
+            const zName = zt.getAttribute('data-zone');
+            zoneTotals[zName] = { beds: 0, liters: 0, hasVisible: false };
+        });
+
+        blockGroups.forEach(bg => {
+            let hasVisibleRowInBlock = false;
+            const rows = bg.querySelectorAll('.order-detail-row');
+            const zName = bg.getAttribute('data-zone');
             
-            let totalBedsGeneral = 0;
-            let totalLitersGeneral = 0;
-            let productTotals = {};
-            let zoneTotals = {};
+            rows.forEach(r => {
+                const rowOp = (r.getAttribute('data-operator') || '').trim();
+                const rowCat = (r.getAttribute('data-crop-category') || 'PRODUCTOS_NUEVOS').trim().toUpperCase();
+                const beds = parseFloat(r.getAttribute('data-std-beds') || '0');
+                const liters = parseFloat(r.getAttribute('data-liters') || '0');
+                const prodCode = (r.getAttribute('data-prod-code') || '').trim();
+                const prodAmt = parseFloat(r.getAttribute('data-prod-amt') || '0');
+                const unit = (r.getAttribute('data-unit') || '').trim();
+                const isFirstInBlock = r.getAttribute('data-is-first-in-block') === '1';
 
-            // Initialize zone counters
-            zoneSubtotalTbodies.forEach(zt => {
-                const zName = zt.getAttribute('data-zone');
-                zoneTotals[zName] = { beds: 0, liters: 0, hasVisible: false };
-            });
+                const matchOp = (selectedOp === 'ALL' || rowOp === selectedOp);
+                const matchCat = (selectedCat === 'ALL' || rowCat === selectedCat);
 
-            blockGroups.forEach(bg => {
-                let hasVisibleRowInBlock = false;
-                const rows = bg.querySelectorAll('.order-detail-row');
-                const zName = bg.getAttribute('data-zone');
-                
-                rows.forEach(r => {
-                    const rowOp = (r.getAttribute('data-operator') || '').trim();
-                    const beds = parseFloat(r.getAttribute('data-std-beds') || '0');
-                    const liters = parseFloat(r.getAttribute('data-liters') || '0');
-                    const prodCode = (r.getAttribute('data-prod-code') || '').trim();
-                    const prodAmt = parseFloat(r.getAttribute('data-prod-amt') || '0');
-                    const unit = (r.getAttribute('data-unit') || '').trim();
-                    const isFirstInBlock = r.getAttribute('data-is-first-in-block') === '1';
+                if (matchOp && matchCat) {
+                    r.style.display = '';
+                    hasVisibleRowInBlock = true;
 
-                    if (selectedOp === 'ALL' || rowOp === selectedOp) {
-                        r.style.display = '';
-                        hasVisibleRowInBlock = true;
-
-                        // Beds are counted once per block
-                        if (isFirstInBlock) {
-                            totalBedsGeneral += beds;
-                            if (zoneTotals[zName]) {
-                                zoneTotals[zName].beds += beds;
-                                zoneTotals[zName].hasVisible = true;
-                            }
+                    // Beds and liters are counted once per block
+                    if (isFirstInBlock) {
+                        totalBedsGeneral += beds;
+                        if (zoneTotals[zName]) {
+                            zoneTotals[zName].beds += beds;
+                            zoneTotals[zName].hasVisible = true;
                         }
-                        
-                        // Liters counted per block once (attached to first row)
-                        if (isFirstInBlock) {
-                            totalLitersGeneral += liters;
-                            if (zoneTotals[zName]) {
-                                zoneTotals[zName].liters += liters;
-                            }
+                        totalLitersGeneral += liters;
+                        if (zoneTotals[zName]) {
+                            zoneTotals[zName].liters += liters;
                         }
-
-                        // Accumulate product quantities for warehouse summary
-                        if (prodCode && prodCode !== 'SIN PRODUCTO') {
-                            if (!productTotals[prodCode]) {
-                                productTotals[prodCode] = { amt: 0, unit: unit };
-                            }
-                            productTotals[prodCode].amt += prodAmt;
-                        }
-                    } else {
-                        r.style.display = 'none';
                     }
-                });
 
-                if (hasVisibleRowInBlock) {
-                    bg.style.display = '';
+                    // Accumulate product quantities for warehouse summary
+                    if (prodCode && prodCode !== 'SIN PRODUCTO') {
+                        if (!productTotals[prodCode]) {
+                            productTotals[prodCode] = { amt: 0, unit: unit };
+                        }
+                        productTotals[prodCode].amt += prodAmt;
+                    }
                 } else {
-                    bg.style.display = 'none';
+                    r.style.display = 'none';
                 }
             });
 
-            // Update Zone Subtotal rows
-            zoneSubtotalTbodies.forEach(zt => {
-                const zName = zt.getAttribute('data-zone');
-                const zInfo = zoneTotals[zName];
-                const bedsCell = zt.querySelector('.cell-zone-beds');
-                const litersCell = zt.querySelector('.cell-zone-liters');
-
-                if (selectedOp === 'ALL') {
-                    zt.style.display = '';
-                    const origBeds = parseFloat(zt.querySelector('.zone-subtotal-row').getAttribute('data-orig-beds') || '0');
-                    const origLiters = parseFloat(zt.querySelector('.zone-subtotal-row').getAttribute('data-orig-liters') || '0');
-                    if (bedsCell) bedsCell.textContent = origBeds.toFixed(2);
-                    if (litersCell) litersCell.textContent = origLiters.toFixed(1) + ' L';
-                } else {
-                    if (zInfo && zInfo.hasVisible) {
-                        zt.style.display = '';
-                        if (bedsCell) bedsCell.textContent = zInfo.beds.toFixed(2);
-                        if (litersCell) litersCell.textContent = zInfo.liters.toFixed(1) + ' L';
-                    } else {
-                        zt.style.display = 'none';
-                    }
-                }
-            });
-
-            // Update Grand Totals in Footer
-            if (tfootBeds) tfootBeds.textContent = totalBedsGeneral.toFixed(2);
-            if (tfootLiters) tfootLiters.textContent = totalLitersGeneral.toFixed(1) + ' L';
-
-            // Update Header & Signature
-            if (selectedOp === 'ALL') {
-                if (subtitleHeader) subtitleHeader.textContent = 'ORDEN OFICIAL DE FUMIGACIÓN GYPSOPHILA';
-                if (sigOperator) sigOperator.textContent = 'Nombre y Firma';
+            if (hasVisibleRowInBlock) {
+                bg.style.display = '';
             } else {
-                if (subtitleHeader) subtitleHeader.textContent = `ORDEN OFICIAL DE FUMIGACIÓN - OPERARIO: ${selectedOp}`;
-                if (sigOperator) sigOperator.textContent = selectedOp;
+                bg.style.display = 'none';
             }
+        });
 
-            // Update Warehouse preparation summary table
-            let visibleWhIndex = 1;
-            document.querySelectorAll('#table-warehouse-summary tbody tr.wh-summary-row').forEach(whRow => {
-                const code = (whRow.getAttribute('data-prod-code') || '').trim();
-                const unit = whRow.getAttribute('data-unit') || '';
-                const qtyCell = whRow.querySelector('.wh-qty-cell');
-                const idxCell = whRow.querySelector('.wh-idx');
+        // Update Zone Subtotal rows
+        zoneSubtotalTbodies.forEach(zt => {
+            const zName = zt.getAttribute('data-zone');
+            const zInfo = zoneTotals[zName];
+            const bedsCell = zt.querySelector('.cell-zone-beds');
+            const litersCell = zt.querySelector('.cell-zone-liters');
 
-                if (selectedOp === 'ALL') {
+            if (selectedOp === 'ALL' && selectedCat === 'ALL') {
+                zt.style.display = '';
+                const origBeds = parseFloat(zt.querySelector('.zone-subtotal-row')?.getAttribute('data-orig-beds') || '0');
+                const origLiters = parseFloat(zt.querySelector('.zone-subtotal-row')?.getAttribute('data-orig-liters') || '0');
+                if (bedsCell) bedsCell.textContent = origBeds.toFixed(2);
+                if (litersCell) litersCell.textContent = origLiters.toFixed(1) + ' L';
+            } else {
+                if (zInfo && zInfo.hasVisible) {
+                    zt.style.display = '';
+                    if (bedsCell) bedsCell.textContent = zInfo.beds.toFixed(2);
+                    if (litersCell) litersCell.textContent = zInfo.liters.toFixed(1) + ' L';
+                } else {
+                    zt.style.display = 'none';
+                }
+            }
+        });
+
+        // Update Grand Totals in Footer
+        if (tfootBeds) tfootBeds.textContent = totalBedsGeneral.toFixed(2);
+        if (tfootLiters) tfootLiters.textContent = totalLitersGeneral.toFixed(1) + ' L';
+
+        // Update Header & Signature
+        let titleParts = [];
+        if (selectedCat === 'GYPSOPHILA') {
+            titleParts.push('ORDEN OFICIAL DE FUMIGACIÓN - GYPSOPHILA');
+        } else if (selectedCat === 'PRODUCTOS_NUEVOS') {
+            titleParts.push('ORDEN OFICIAL DE FUMIGACIÓN - PRODUCTOS NUEVOS (VARIEDADES)');
+        } else if (selectedCat === 'PIV') {
+            titleParts.push('ORDEN OFICIAL DE FUMIGACIÓN - PIV');
+        } else {
+            titleParts.push('ORDEN OFICIAL DE FUMIGACIÓN');
+        }
+
+        if (selectedOp !== 'ALL') {
+            titleParts.push(`(OPERARIO: ${selectedOp})`);
+            if (sigOperator) sigOperator.textContent = selectedOp;
+        } else {
+            if (sigOperator) sigOperator.textContent = 'Nombre y Firma';
+        }
+
+        if (subtitleHeader) subtitleHeader.textContent = titleParts.join(' ');
+
+        // Update Warehouse preparation summary table
+        let visibleWhIndex = 1;
+        document.querySelectorAll('#table-warehouse-summary tbody tr.wh-summary-row').forEach(whRow => {
+            const code = (whRow.getAttribute('data-prod-code') || '').trim();
+            const unit = whRow.getAttribute('data-unit') || '';
+            const qtyCell = whRow.querySelector('.wh-qty-cell');
+            const idxCell = whRow.querySelector('.wh-idx');
+
+            if (selectedOp === 'ALL' && selectedCat === 'ALL') {
+                whRow.style.display = '';
+                const origQty = parseFloat(whRow.getAttribute('data-orig-qty') || '0');
+                if (qtyCell) qtyCell.textContent = formatAmount(origQty, unit);
+                if (idxCell) idxCell.textContent = visibleWhIndex++;
+            } else {
+                if (productTotals[code] && productTotals[code].amt > 0) {
                     whRow.style.display = '';
-                    const origQty = parseFloat(whRow.getAttribute('data-orig-qty') || '0');
-                    if (qtyCell) qtyCell.textContent = formatAmount(origQty, unit);
+                    if (qtyCell) qtyCell.textContent = formatAmount(productTotals[code].amt, unit);
                     if (idxCell) idxCell.textContent = visibleWhIndex++;
                 } else {
-                    if (productTotals[code] && productTotals[code].amt > 0) {
-                        whRow.style.display = '';
-                        if (qtyCell) qtyCell.textContent = formatAmount(productTotals[code].amt, unit);
-                        if (idxCell) idxCell.textContent = visibleWhIndex++;
-                    } else {
-                        whRow.style.display = 'none';
-                    }
+                    whRow.style.display = 'none';
                 }
-            });
+            }
         });
     }
+
+    if (operatorSelect) operatorSelect.addEventListener('change', applyOrderFilters);
+    if (categorySelect) categorySelect.addEventListener('change', applyOrderFilters);
 });
+
+function setCategoryAndPrint(cat) {
+    const categorySelect = document.getElementById('select-print-category');
+    if (categorySelect) {
+        categorySelect.value = cat;
+        categorySelect.dispatchEvent(new Event('change'));
+    }
+    setTimeout(() => {
+        executePrintOrder({{ order.id }});
+    }, 150);
+}
 
 function executePrintOrder(orderId) {
     fetch(`/fumigacion/ordenes/${orderId}/marcar-ejecutada`, {

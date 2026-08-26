@@ -24,6 +24,15 @@
                     <input type="text" name="name" class="form-control" placeholder="ej. Hypericum" value="{{ crop.name if crop else '' }}" required>
                 </div>
                 <div class="col-md-6">
+                    <label class="form-label fw-semibold">Grupo de Impresión / Pesaje <span class="text-danger">*</span></label>
+                    <select name="category" class="form-select fw-semibold" required>
+                        <option value="GYPSOPHILA" {% if crop and crop.category == 'GYPSOPHILA' %}selected{% endif %}>🌸 Gypsophila (Principal)</option>
+                        <option value="PRODUCTOS_NUEVOS" {% if not crop or (crop and crop.category in ('PRODUCTOS_NUEVOS', 'VARIEDADES')) %}selected{% endif %}>🌿 Productos Nuevos / Variedades (Solidago, Hypericum, Verónica, etc.)</option>
+                        <option value="PIV" {% if crop and crop.category == 'PIV' %}selected{% endif %}>🌱 PIV (Propagación / Invernadero Vegetativo)</option>
+                    </select>
+                    <div class="form-text">Define cómo se agrupa para imprimir órdenes de campo y para pesaje en bodega.</div>
+                </div>
+                <div class="col-12">
                     <label class="form-label fw-semibold">Alias y Variaciones (Separados por coma)</label>
                     <input type="text" name="aliases" class="form-control" placeholder="ej. HYPERICUM, HYPERYCUM, MAGICAL" value="{{ crop.aliases|join(', ') if crop else '' }}">
                     <div class="form-text">Para cruzar con nombres en Estado de Cultivo y Litrajes.</div>

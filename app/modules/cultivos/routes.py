@@ -27,6 +27,7 @@ def api_list():
 def create():
     if request.method == 'POST':
         name = request.form.get('name', '').strip()
+        category = request.form.get('category', 'PRODUCTOS_NUEVOS').strip()
         aliases_str = request.form.get('aliases', '').strip()
         veg_min = request.form.get('veg_min_age', 0)
         veg_max = request.form.get('veg_max_age', 12)
@@ -54,6 +55,7 @@ def create():
 
         crop = Crop(
             name=name,
+            category=category,
             veg_min_age=veg_min_int,
             veg_max_age=veg_max_int,
             prod_min_age=prod_min_int,
@@ -65,7 +67,7 @@ def create():
         db.session.add(crop)
         db.session.commit()
 
-        record_audit('CULTIVOS', 'CREATE', 'Crop', crop.id, details={'name': name, 'veg_range': f"{veg_min_int}-{veg_max_int}", 'prod_range': f"{prod_min_int}-{prod_max_int}"})
+        record_audit('CULTIVOS', 'CREATE', 'Crop', crop.id, details={'name': name, 'category': category, 'veg_range': f"{veg_min_int}-{veg_max_int}", 'prod_range': f"{prod_min_int}-{prod_max_int}"})
         flash(f"Cultivo '{name}' configurado exitosamente.", "success")
         return redirect(url_for('cultivos.index'))
 
@@ -79,6 +81,7 @@ def edit(crop_id):
     crop = Crop.query.get_or_404(crop_id)
     if request.method == 'POST':
         name = request.form.get('name', '').strip()
+        category = request.form.get('category', 'PRODUCTOS_NUEVOS').strip()
         aliases_str = request.form.get('aliases', '').strip()
         veg_min = request.form.get('veg_min_age', 0)
         veg_max = request.form.get('veg_max_age', 12)
@@ -106,12 +109,13 @@ def edit(crop_id):
             return render_template('cultivos/form.html', crop=crop)
 
         crop.name = name
+        crop.category = category
         crop.aliases = aliases_str
         crop.is_active = is_active
         crop.notes = notes
 
         db.session.commit()
-        record_audit('CULTIVOS', 'UPDATE', 'Crop', crop.id, details={'name': name, 'is_active': is_active})
+        record_audit('CULTIVOS', 'UPDATE', 'Crop', crop.id, details={'name': name, 'category': category, 'is_active': is_active})
         flash(f"Configuración de cultivo '{crop.name}' actualizada.", "success")
         return redirect(url_for('cultivos.index'))
 

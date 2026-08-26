@@ -111,13 +111,20 @@ def salidas():
         if ord.scheduled_day and ord.scheduled_day not in scheduled_days:
             scheduled_days.append(ord.scheduled_day)
 
-    # Build data structure: {area: {product_code: {day: quantity}}}
+    # Build data structure grouped by area and category
     data_by_area = {}
+    data_by_category = {
+        'GYPSOPHILA': {},
+        'PRODUCTOS_NUEVOS': {},
+        'PIV': {}
+    }
     product_info = {}
+    from app.shared.utils import get_crop_category
 
     for order in display_orders:
         for detail in order.details:
             area = (detail.crop_name or 'GENERAL').strip()
+            cat = get_crop_category(area)
             product_code = (detail.product_code or '').strip()
             day = order.scheduled_day
             amount = float(detail.product_amount or 0.0)
@@ -125,24 +132,39 @@ def salidas():
             if not product_code or product_code == 'SIN PRODUCTO':
                 continue
 
+            # Group by Area
             if area not in data_by_area:
-                data_by_area[area] = {}
-            if product_code not in data_by_area[area]:
-                data_by_area[area][product_code] = {d: 0.0 for d in scheduled_days}
+                data_by_area[area] = {
+                    'category': cat,
+                    'products': {}
+                }
+            if product_code not in data_by_area[area]['products']:
+                data_by_area[area]['products'][product_code] = {d: 0.0 for d in scheduled_days}
+
+            # Group by Operational Category (Gypsophila, Productos Nuevos, PIV)
+            if cat not in data_by_category:
+                data_by_category[cat] = {}
+            if product_code not in data_by_category[cat]:
+                data_by_category[cat][product_code] = {d: 0.0 for d in scheduled_days}
 
             if product_code not in product_info:
                 product_info[product_code] = {
                     'commercial_name': detail.commercial_name or product_code,
-                    'unit': detail.unit or 'CC'
+                    'unit': detail.unit or 'CC',
+                    'category': cat,
+                    'pest': detail.pest or ''
                 }
 
-            if day in data_by_area[area][product_code]:
-                data_by_area[area][product_code][day] += amount
+            if day in data_by_area[area]['products'][product_code]:
+                data_by_area[area]['products'][product_code][day] += amount
+
+            if day in data_by_category[cat][product_code]:
+                data_by_category[cat][product_code][day] += amount
 
     # Build general summary (without area grouping)
     general_summary = {}
-    for area_products in data_by_area.values():
-        for product_code, day_quantities in area_products.items():
+    for area_info in data_by_area.values():
+        for product_code, day_quantities in area_info['products'].items():
             if product_code not in general_summary:
                 general_summary[product_code] = {d: 0.0 for d in scheduled_days}
             for day, qty in day_quantities.items():
@@ -161,6 +183,7 @@ def salidas():
         selected_order=selected_order,
         scheduled_days=scheduled_days,
         data_by_area=data_by_area,
+        data_by_category=data_by_category,
         general_summary=general_summary,
         product_info=product_info,
         all_rotations=approved_rotations,

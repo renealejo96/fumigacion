@@ -75,6 +75,7 @@ class Crop(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), unique=True, nullable=False, index=True)
+    category = db.Column(db.String(50), default='PRODUCTOS_NUEVOS', nullable=False)  # 'GYPSOPHILA', 'PRODUCTOS_NUEVOS', 'PIV'
     aliases_json = db.Column(db.Text, default='[]')
     veg_min_age = db.Column(db.Integer, default=0, nullable=False)
     veg_max_age = db.Column(db.Integer, default=12, nullable=False)
@@ -121,6 +122,7 @@ class Crop(db.Model):
         return {
             'id': self.id,
             'name': self.name,
+            'category': self.category or 'PRODUCTOS_NUEVOS',
             'aliases': self.aliases,
             'veg_min_age': self.veg_min_age,
             'veg_max_age': self.veg_max_age,
@@ -459,6 +461,11 @@ class FumigationOrderDetail(db.Model):
     order_in_mix = db.Column(db.Integer, default=0, nullable=False)
     is_additional = db.Column(db.Boolean, default=False, nullable=False)
     created_at = db.Column(db.DateTime, default=get_local_now)
+
+    @property
+    def crop_category(self):
+        from app.shared.utils import get_crop_category
+        return get_crop_category(self.crop_name)
 
     def to_dict(self):
         return {

@@ -293,6 +293,30 @@
     </div>
 </div>
 
+<!-- Category Quick Filter Toolbar for Bodega -->
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3 p-2 bg-white rounded border shadow-sm no-print">
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+        <span class="small fw-bold text-dark"><i class="fa-solid fa-filter me-1 text-primary"></i> Filtrar Pesaje / Insumos:</span>
+        <div class="btn-group btn-group-sm" role="group" id="bodega-category-filter-group">
+            <button type="button" class="btn btn-primary active fw-bold btn-bodega-cat" data-cat="ALL" onclick="filterBodegaCategory('ALL', this);">
+                📋 Todo el Programa
+            </button>
+            <button type="button" class="btn btn-outline-primary fw-bold btn-bodega-cat" data-cat="GYPSOPHILA" onclick="filterBodegaCategory('GYPSOPHILA', this);">
+                🌸 Solo Gypsophila
+            </button>
+            <button type="button" class="btn btn-outline-success fw-bold btn-bodega-cat" data-cat="PRODUCTOS_NUEVOS" onclick="filterBodegaCategory('PRODUCTOS_NUEVOS', this);">
+                🌿 Solo Prod. Nuevos / Variedades
+            </button>
+            <button type="button" class="btn btn-outline-info fw-bold btn-bodega-cat" data-cat="PIV" onclick="filterBodegaCategory('PIV', this);">
+                🌱 Solo PIV
+            </button>
+        </div>
+    </div>
+    <div class="small text-muted font-monospace">
+        Mostrando insumos según el cultivo seleccionado
+    </div>
+</div>
+
 <!-- Tabs for Navigation Views -->
 <ul class="nav nav-tabs mb-4 no-print shadow-sm bg-white rounded-top" id="salidasTabs" role="tablist">
     <li class="nav-item" role="presentation">
@@ -321,13 +345,20 @@
     <!-- Tab 1: By Area View -->
     <div class="tab-pane fade show active" id="by-area" role="tabpanel">
         {% if data_by_area and data_by_area|length > 0 %}
-        {% for area in data_by_area|dictsort %}
-        <div class="card mb-4 shadow-sm border-0">
+        {% for area_name, area_info in data_by_area|dictsort %}
+        <div class="card mb-4 shadow-sm border-0 area-card" data-category="{{ area_info.category }}">
             <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center py-2">
                 <h6 class="mb-0 fw-bold">
-                    <i class="fa-solid fa-seedling me-2"></i>Área / Cultivo: {{ area[0] }}
+                    <i class="fa-solid fa-seedling me-2"></i>Área / Cultivo: {{ area_name }}
+                    {% if area_info.category == 'GYPSOPHILA' %}
+                    <span class="badge bg-light text-primary ms-2"><i class="fa-solid fa-seedling me-1"></i>🌸 Gypsophila</span>
+                    {% elif area_info.category == 'PIV' %}
+                    <span class="badge bg-light text-info ms-2"><i class="fa-solid fa-leaf me-1"></i>🌱 PIV</span>
+                    {% else %}
+                    <span class="badge bg-light text-success ms-2"><i class="fa-solid fa-spa me-1"></i>🌿 Productos Nuevos / Variedades</span>
+                    {% endif %}
                 </h6>
-                <span class="badge bg-light text-dark">{{ area[1]|length }} insumos</span>
+                <span class="badge bg-light text-dark">{{ area_info.products|length }} insumos</span>
             </div>
             <div class="card-body p-0">
                 <div class="table-responsive">
@@ -343,7 +374,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {% for product_code, day_quantities in area[1]|dictsort %}
+                            {% for product_code, day_quantities in area_info.products|dictsort %}
                             {% set p_unit = product_info[product_code]['unit'] %}
                             <tr>
                                 <td class="fw-semibold text-dark">{{ product_info[product_code]['commercial_name'] }}</td>
@@ -376,13 +407,171 @@
         {% endif %}
     </div>
 
-    <!-- Tab 2: General Summary View -->
+    <!-- Tab 2: General Summary View & Category Pesaje Groups -->
     <div class="tab-pane fade" id="general" role="tabpanel">
+        
+        <!-- PESAJE 1: GYPSOPHILA -->
+        {% if data_by_category.get('GYPSOPHILA') and data_by_category['GYPSOPHILA']|length > 0 %}
+        <div class="card shadow-sm border-0 mb-4 pesaje-card" data-category="GYPSOPHILA">
+            <div class="card-header bg-primary text-white py-2 d-flex justify-content-between align-items-center">
+                <h6 class="mb-0 fw-bold">
+                    <i class="fa-solid fa-scale-balanced me-2"></i>1. PESAJE DE AGROQUÍMICOS &bull; 🌸 GYPSOPHILA
+                </h6>
+                <span class="badge bg-light text-primary fw-bold">Semana {{ rotation.week }}</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover table-striped align-middle mb-0 small">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 35px;" class="text-center">Pesado</th>
+                                <th style="width: 250px;">Producto Agroquímico</th>
+                                <th style="width: 65px;" class="text-center">U.M</th>
+                                {% for day in scheduled_days %}
+                                <th class="text-end">{{ day }}</th>
+                                {% endfor %}
+                                <th class="text-end bg-light fw-bold">Total a Pesar</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for product_code, day_quantities in data_by_category['GYPSOPHILA']|dictsort %}
+                            {% set p_unit = product_info[product_code]['unit'] %}
+                            <tr>
+                                <td class="text-center">
+                                    <input type="checkbox" class="form-check-input" style="width: 16px; height: 16px;">
+                                </td>
+                                <td class="fw-bold text-dark font-monospace">{{ product_info[product_code]['commercial_name'] }}</td>
+                                <td class="text-center text-muted small">{{ p_unit }}</td>
+                                {% set total = namespace(value=0.0) %}
+                                {% for day in scheduled_days %}
+                                {% set qty = day_quantities[day] %}
+                                {% set total.value = total.value + qty %}
+                                <td class="text-end {% if qty > 0 %}text-success fw-bold{% else %}text-muted{% endif %}">
+                                    {{ qty|format_product(p_unit) if qty > 0 else '-' }}
+                                </td>
+                                {% endfor %}
+                                <td class="text-end fw-bold bg-light text-primary">
+                                    {{ total.value|format_product(p_unit) }}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- PESAJE 2: PRODUCTOS NUEVOS / VARIEDADES -->
+        {% if data_by_category.get('PRODUCTOS_NUEVOS') and data_by_category['PRODUCTOS_NUEVOS']|length > 0 %}
+        <div class="card shadow-sm border-0 mb-4 pesaje-card" data-category="PRODUCTOS_NUEVOS">
+            <div class="card-header bg-success text-white py-2 d-flex justify-content-between align-items-center">
+                <h6 class="mb-0 fw-bold">
+                    <i class="fa-solid fa-scale-balanced me-2"></i>2. PESAJE DE AGROQUÍMICOS &bull; 🌿 PRODUCTOS NUEVOS (VARIEDADES)
+                </h6>
+                <span class="badge bg-light text-success fw-bold">Solidago, Verónica, Hypericum...</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover table-striped align-middle mb-0 small">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 35px;" class="text-center">Pesado</th>
+                                <th style="width: 250px;">Producto Agroquímico</th>
+                                <th style="width: 65px;" class="text-center">U.M</th>
+                                {% for day in scheduled_days %}
+                                <th class="text-end">{{ day }}</th>
+                                {% endfor %}
+                                <th class="text-end bg-light fw-bold">Total a Pesar</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for product_code, day_quantities in data_by_category['PRODUCTOS_NUEVOS']|dictsort %}
+                            {% set p_unit = product_info[product_code]['unit'] %}
+                            <tr>
+                                <td class="text-center">
+                                    <input type="checkbox" class="form-check-input" style="width: 16px; height: 16px;">
+                                </td>
+                                <td class="fw-bold text-dark font-monospace">{{ product_info[product_code]['commercial_name'] }}</td>
+                                <td class="text-center text-muted small">{{ p_unit }}</td>
+                                {% set total = namespace(value=0.0) %}
+                                {% for day in scheduled_days %}
+                                {% set qty = day_quantities[day] %}
+                                {% set total.value = total.value + qty %}
+                                <td class="text-end {% if qty > 0 %}text-success fw-bold{% else %}text-muted{% endif %}">
+                                    {{ qty|format_product(p_unit) if qty > 0 else '-' }}
+                                </td>
+                                {% endfor %}
+                                <td class="text-end fw-bold bg-light text-success">
+                                    {{ total.value|format_product(p_unit) }}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- PESAJE 3: PIV -->
+        {% if data_by_category.get('PIV') and data_by_category['PIV']|length > 0 %}
+        <div class="card shadow-sm border-0 mb-4 pesaje-card" data-category="PIV">
+            <div class="card-header bg-info text-white py-2 d-flex justify-content-between align-items-center">
+                <h6 class="mb-0 fw-bold">
+                    <i class="fa-solid fa-scale-balanced me-2"></i>3. PESAJE DE AGROQUÍMICOS &bull; 🌱 PIV (PROPAGACIÓN / INVERNADERO)
+                </h6>
+                <span class="badge bg-light text-info fw-bold">Semana {{ rotation.week }}</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover table-striped align-middle mb-0 small">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 35px;" class="text-center">Pesado</th>
+                                <th style="width: 250px;">Producto Agroquímico</th>
+                                <th style="width: 65px;" class="text-center">U.M</th>
+                                {% for day in scheduled_days %}
+                                <th class="text-end">{{ day }}</th>
+                                {% endfor %}
+                                <th class="text-end bg-light fw-bold">Total a Pesar</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for product_code, day_quantities in data_by_category['PIV']|dictsort %}
+                            {% set p_unit = product_info[product_code]['unit'] %}
+                            <tr>
+                                <td class="text-center">
+                                    <input type="checkbox" class="form-check-input" style="width: 16px; height: 16px;">
+                                </td>
+                                <td class="fw-bold text-dark font-monospace">{{ product_info[product_code]['commercial_name'] }}</td>
+                                <td class="text-center text-muted small">{{ p_unit }}</td>
+                                {% set total = namespace(value=0.0) %}
+                                {% for day in scheduled_days %}
+                                {% set qty = day_quantities[day] %}
+                                {% set total.value = total.value + qty %}
+                                <td class="text-end {% if qty > 0 %}text-success fw-bold{% else %}text-muted{% endif %}">
+                                    {{ qty|format_product(p_unit) if qty > 0 else '-' }}
+                                </td>
+                                {% endfor %}
+                                <td class="text-end fw-bold bg-light text-info">
+                                    {{ total.value|format_product(p_unit) }}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Consolidado General Total -->
         {% if general_summary and general_summary|length > 0 %}
-        <div class="card shadow-sm border-0 mb-4">
+        <div class="card shadow-sm border-0 mb-4 pesaje-card" data-category="ALL">
             <div class="card-header bg-dark text-white py-2 d-flex justify-content-between align-items-center">
                 <h6 class="mb-0 fw-bold">
-                    <i class="fa-solid fa-boxes-stacked me-2"></i>Consolidado Total de Insumos para Despacho y Pesaje en Bodega
+                    <i class="fa-solid fa-boxes-stacked me-2"></i>CONSOLIDADO TOTAL GENERAL (TODOS LOS CULTIVOS JUNTOS)
                 </h6>
                 <span class="badge bg-light text-dark">Semana {{ rotation.week }}</span>
             </div>
@@ -426,7 +615,7 @@
 
         <div class="alert alert-info py-2 small shadow-sm no-print">
             <i class="fa-solid fa-circle-info me-1"></i>
-            <strong>Instrucciones para Bodeguero:</strong> Pesar y dosificar las cantidades en enteros exactos para unidades en CC/GR. Entregar a los aplicadores autorizados con su respectiva orden de aplicación.
+            <strong>Instrucciones para Bodeguero:</strong> Pesar y dosificar primero los insumos de <strong>Gypsophila</strong>, luego <strong>Variedades (Productos Nuevos)</strong> y finalmente <strong>PIV</strong>. Pesar en enteros exactos para unidades en CC/GR.
         </div>
         {% else %}
         <div class="text-center py-5 text-muted bg-white rounded-3 shadow-sm border p-4 my-3">
@@ -648,6 +837,52 @@ function toggleDispatchSalidas(rotationId) {
         }
     })
     .catch(err => console.error('Error toggling dispatch:', err));
+}
+// Filter Bodega Categories for Area Breakdown and Pesaje Tables
+function filterBodegaCategory(cat, btnElement) {
+    // Update active button state
+    document.querySelectorAll('.btn-bodega-cat').forEach(b => {
+        b.classList.remove('active', 'btn-primary', 'btn-success', 'btn-info');
+        b.classList.add('btn-outline-secondary');
+    });
+
+    if (btnElement) {
+        btnElement.classList.remove('btn-outline-secondary');
+        btnElement.classList.add('active');
+        if (cat === 'GYPSOPHILA') {
+            btnElement.classList.add('btn-primary');
+        } else if (cat === 'PRODUCTOS_NUEVOS') {
+            btnElement.classList.add('btn-success');
+        } else if (cat === 'PIV') {
+            btnElement.classList.add('btn-info');
+        } else {
+            btnElement.classList.add('btn-primary');
+        }
+    }
+
+    // Filter Tab 1: Area cards
+    document.querySelectorAll('#by-area .area-card').forEach(card => {
+        const cCat = (card.getAttribute('data-category') || 'PRODUCTOS_NUEVOS').trim().toUpperCase();
+        if (cat === 'ALL' || cCat === cat) {
+            card.style.display = '';
+        } else {
+            card.style.display = 'none';
+        }
+    });
+
+    // Filter Tab 2: Pesaje cards
+    document.querySelectorAll('#general .pesaje-card').forEach(card => {
+        const pCat = (card.getAttribute('data-category') || 'ALL').trim().toUpperCase();
+        if (cat === 'ALL') {
+            card.style.display = '';
+        } else {
+            if (pCat === cat) {
+                card.style.display = '';
+            } else {
+                card.style.display = 'none';
+            }
+        }
+    });
 }
 </script>
 {% endblock %}
