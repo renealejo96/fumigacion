@@ -320,6 +320,7 @@ class CalculationEngine:
                     'products': products_list,
                     'products_detail': products_detail,
                     'products_summary_text': ", ".join(products_summary_text_parts),
+                    'is_custom_mix': seg.get('is_custom_mix', False),
                     'is_additional': seg.get('is_additional', False)
                 }
 

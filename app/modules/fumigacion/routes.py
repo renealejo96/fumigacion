@@ -302,21 +302,31 @@ def rotacion_detalle(rotation_id):
     rotation = Rotation.query.get_or_404(rotation_id)
     
     # NEW: Load review data by round
+    # NEW: Load review data by round and draft data
     review_by_round = {}
     if rotation.review_data_by_round_json:
         try:
             review_by_round = json.loads(rotation.review_data_by_round_json)
         except Exception:
             review_by_round = {}
+
+    draft_segments = None
+    if rotation.review_data_json:
+        try:
+            draft_segments = json.loads(rotation.review_data_json)
+        except Exception:
+            draft_segments = None
     
     # Get all rounds sorted
     all_rounds = RotationRound.query.filter_by(rotation_id=rotation.id).order_by(RotationRound.round_number.asc()).all()
     
-    # For initial display, load first round's data (or base if no custom data)
+    # For initial display, load first round's data (or draft if available)
     first_round_id = all_rounds[0].id if all_rounds else None
     review_segments = []
     if first_round_id and str(first_round_id) in review_by_round:
         review_segments = review_by_round[str(first_round_id)]
+    elif draft_segments:
+        review_segments = draft_segments
     
     # Preload target week and crop state records once
     rot_week = rotation.week.strip() if rotation.week else ''
@@ -353,6 +363,10 @@ def rotacion_detalle(rotation_id):
             if str(rid) in review_by_round:
                 custom_segs = review_by_round[str(rid)]
         
+        # If no round-specific review is assigned yet, fallback to working draft
+        if custom_segs is None and draft_segments:
+            custom_segs = draft_segments
+
         calc = CalculationEngine.calculate_round(r, custom_review_segments=custom_segs, cached_crop_records=cached_crop_records)
         rounds_calculated.append({
             'round': r,
@@ -489,6 +503,19 @@ def rotacion_guardar_revision(rotation_id):
         record_audit('FUMIGACION', 'ASSIGN_REVIEW_TO_ROUND', 'Rotation', rotation.id, 
                      details={'target_round_id': target_round_id, 'round_name': r_name, 'segments_count': len(segments)})
     else:
+        # If target_round_id is None (Saved draft), sync with first round if review_data_by_round_json is empty
+        all_rounds = RotationRound.query.filter_by(rotation_id=rotation.id).order_by(RotationRound.round_number.asc()).all()
+        if all_rounds:
+            first_round_id = all_rounds[0].id
+            review_by_round = {}
+            if rotation.review_data_by_round_json:
+                try:
+                    review_by_round = json.loads(rotation.review_data_by_round_json)
+                except:
+                    review_by_round = {}
+            review_by_round[str(first_round_id)] = segments
+            rotation.review_data_by_round_json = json.dumps(review_by_round, ensure_ascii=False)
+
         db.session.commit()
         record_audit('FUMIGACION', 'SAVE_REVIEW_DRAFT', 'Rotation', rotation.id, 
                      details={'segments_count': len(segments)})
@@ -534,11 +561,22 @@ def rotacion_get_cumulative(rotation_id):
     
     # Apply cumulative adjustments from round 0 up to target_position
     cumulative_segments = base_segments
+    found_custom = False
     for i in range(target_position + 1):
         rid = round_ids_ordered[i]
         if str(rid) in review_by_round:
             # This round has custom adjustments, use them
             cumulative_segments = review_by_round[str(rid)]
+            found_custom = True
+    
+    # If no round-specific adjustment was found, check if draft exists
+    if not found_custom and rotation.review_data_json:
+        try:
+            draft_segs = json.loads(rotation.review_data_json)
+            if draft_segs:
+                cumulative_segments = draft_segs
+        except Exception:
+            pass
     
     # Convert segments to dict format for frontend
     segments_dict = []

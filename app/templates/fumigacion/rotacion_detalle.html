@@ -428,10 +428,10 @@
                                 </td>
                                 <td class="text-end text-nowrap">
                                     <input type="hidden" class="seg-products-json" value='{{ s.products|tojson if s.products else "[]" }}'>
-                                    <input type="hidden" class="seg-custom-mix" value='false'>
+                                    <input type="hidden" class="seg-custom-mix" value='{{ "true" if s.is_custom_mix else "false" }}'>
                                     <button type="button" class="btn btn-outline-primary btn-sm py-0 px-1 me-1 btn-edit-block-mix" title="Editar mezcla / quitar productos para este bloque">
                                         <i class="fa-solid fa-flask"></i>
-                                        <span class="badge-mix-indicator text-warning small ms-1" style="display:none;" title="Mezcla modificada (difiere de la rotación)"><i class="fa-solid fa-triangle-exclamation"></i></span>
+                                        <span class="badge-mix-indicator text-warning small ms-1" style="display:{{ 'inline-block' if s.is_custom_mix else 'none' }};" title="Mezcla modificada (difiere de la rotación)"><i class="fa-solid fa-triangle-exclamation"></i></span>
                                     </button>
                                     <button type="button" class="btn btn-outline-danger btn-sm py-0 px-1 btn-delete-clean-row" title="Eliminar fila de este bloque">
                                         <i class="fa-regular fa-trash-can"></i>
