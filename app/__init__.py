@@ -53,10 +53,15 @@ def create_app(config_class=Config):
     with app.app_context():
         try:
             from sqlalchemy import text
-            db.session.execute(text("ALTER TABLE crops ADD COLUMN category VARCHAR(50) DEFAULT 'PRODUCTOS_NUEVOS'"))
+            db.session.execute(text("ALTER TABLE crops ADD COLUMN IF NOT EXISTS category VARCHAR(50) DEFAULT 'PRODUCTOS_NUEVOS'"))
             db.session.commit()
         except Exception:
             db.session.rollback()
+            try:
+                db.session.execute(text("ALTER TABLE crops ADD COLUMN category VARCHAR(50) DEFAULT 'PRODUCTOS_NUEVOS'"))
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
 
     # Register blueprints
     from app.modules.auth.routes import auth_bp
