@@ -349,26 +349,27 @@ tr {
         </div>
     </div>
 
-    <!-- Exact 20-Column Table with Zone Subtotals and Indivisible Block Groups -->
+    <!-- Exact 21-Column Table with Single Block Header Box and Zone Subtotals -->
     <div class="table-responsive mb-2">
         <table class="table table-sm table-order align-middle mb-0" id="table-main-order">
             <thead>
-                <tr>
+                <tr class="order-header-row bg-dark text-white">
                     <th style="width: 32px;">VTA</th>
-                    <th style="width: 44px;">DÍA</th>
-                    <th style="width: 44px;">FECHA</th>
-                    <th style="width: 55px;">ZONA</th>
-                    <th style="width: 52px;">BLOQUE</th>
-                    <th style="width: 68px;">VARIEDAD</th>
-                    <th style="width: 38px;">EDAD</th>
+                    <th style="width: 38px;">DÍA</th>
+                    <th style="width: 42px;">FECHA</th>
+                    <th style="width: 50px;">ZONA</th>
+                    <th style="width: 55px;">BLOQUE</th>
+                    <th style="width: 70px;">VARIEDAD</th>
+                    <th style="width: 36px;">EDAD</th>
                     <th style="width: 48px;">CAMAS</th>
-                    <th style="width: 72px;">UBICACIÓN</th>
-                    <th style="width: 82px;">PRODUCTO</th>
-                    <th style="width: 30px;">UM</th>
-                    <th style="width: 38px;">DOSIS</th>
-                    <th style="width: 52px;">TOTAL</th>
-                    <th style="width: 52px;">LITROS</th>
+                    <th style="width: 70px;">UBICACIÓN</th>
+                    <th style="width: 54px;">LITROS</th>
                     <th style="width: 42px;">L/CAM</th>
+                    <th style="width: 65px;">LANZA</th>
+                    <th style="width: 80px;">PRODUCTO</th>
+                    <th style="width: 28px;">UM</th>
+                    <th style="width: 36px;">DOSIS</th>
+                    <th style="width: 52px;">TOTAL</th>
                     <th style="width: 75px;">PLAGA</th>
                     <th style="width: 75px;">I. ACTIVO</th>
                     <th style="width: 28px;">CT</th>
@@ -380,25 +381,35 @@ tr {
             <!-- Render each Zone and its Blocks with Zone Subtotals at the end of each Zone -->
             {% for z_key, z_info in zones_map.items() %}
                 {% for b_key, b_info in z_info.blocks.items() %}
+                {% set num_rows = b_info.rows|length %}
                 <tbody class="block-group" data-zone="{{ z_info.zone_name }}" data-block="{{ b_info.block_name }}">
                     {% for d in b_info.rows %}
                     {% set cinfo = d.toxicological_color %}
-                    <tr class="order-detail-row" data-zone="{{ z_info.zone_name }}" data-operator="{{ d.operator }}" data-crop="{{ d.crop_name }}" data-crop-category="{{ d.crop_name|crop_category }}" data-std-beds="{{ d.standard_beds }}" data-liters="{{ d.total_liters }}" data-prod-code="{{ d.product_code }}" data-prod-amt="{{ d.product_amount }}" data-unit="{{ d.unit }}" data-is-first-in-block="{{ '1' if loop.first else '0' }}">
-                        <td class="text-center font-monospace">{{ d.round_name|replace('Vuelta ', 'V')|replace('VUELTA ', 'V')|replace('vuelta ', 'V') }}</td>
-                        <td class="text-center">{{ d.scheduled_day[:3] if d.scheduled_day else '' }}</td>
-                        <td class="text-center small">{{ d.scheduled_date.strftime('%d/%m') if d.scheduled_date else '' }}</td>
-                        <td class="text-center small">{{ d.zone or '-' }}</td>
-                        <td class="text-center fw-bold">{{ d.block_name }}</td>
-                        <td class="text-truncate" style="max-width: 75px;" title="{{ d.crop_name }}">{{ d.crop_name }}</td>
-                        <td class="text-center">{{ d.real_age|format_age }}</td>
-                        <td class="text-end fw-semibold">{{ d.standard_beds|format_number(2) }}</td>
-                        <td class="text-center font-monospace small">{{ d.bed_range }}</td>
+                    <tr class="order-detail-row" data-zone="{{ z_info.zone_name }}" data-operator="{{ d.operator }}" data-crop="{{ d.crop_name }}" data-crop-category="{{ d.crop_name|crop_category }}" data-std-beds="{{ d.standard_beds }}" data-liters="{{ d.total_liters }}" data-prod-code="{{ d.product_code }}" data-prod-name="{{ d.commercial_name or d.product_code }}" data-prod-amt="{{ d.product_amount }}" data-unit="{{ d.unit }}" data-is-first-in-block="{{ '1' if loop.first else '0' }}">
+                        
+                        {% if loop.first %}
+                        <!-- Single Visual Box for Block Metadata (rowspan across all products in block) -->
+                        <td rowspan="{{ num_rows }}" class="text-center font-monospace fw-bold text-dark align-middle">{{ d.round_name|replace('Vuelta ', 'V')|replace('VUELTA ', 'V')|replace('vuelta ', 'V') }}</td>
+                        <td rowspan="{{ num_rows }}" class="text-center fw-bold align-middle">{{ d.scheduled_day[:3] if d.scheduled_day else '' }}</td>
+                        <td rowspan="{{ num_rows }}" class="text-center small align-middle">{{ d.scheduled_date.strftime('%d/%m') if d.scheduled_date else '' }}</td>
+                        <td rowspan="{{ num_rows }}" class="text-center small fw-semibold align-middle">{{ d.zone or '-' }}</td>
+                        <td rowspan="{{ num_rows }}" class="text-center fw-bold fs-6 text-primary align-middle" style="background-color: #f8fafc;">{{ d.block_name }}</td>
+                        <td rowspan="{{ num_rows }}" class="fw-bold align-middle text-truncate" style="max-width: 80px;" title="{{ d.crop_name }}">{{ d.crop_name }}</td>
+                        <td rowspan="{{ num_rows }}" class="text-center fw-bold align-middle">{{ d.real_age|format_age }}</td>
+                        <td rowspan="{{ num_rows }}" class="text-end fw-bold fs-6 text-dark align-middle">{{ d.standard_beds|format_number(2) }}</td>
+                        <td rowspan="{{ num_rows }}" class="text-center font-monospace small fw-bold align-middle">{{ d.bed_range }}</td>
+                        <td rowspan="{{ num_rows }}" class="text-end fw-bold fs-6 text-success align-middle">{{ d.total_liters|format_number(1) }}</td>
+                        <td rowspan="{{ num_rows }}" class="text-end fw-semibold align-middle">{{ d.liters_per_bed|format_number(1) }}</td>
+                        <td rowspan="{{ num_rows }}" class="text-center small fw-semibold align-middle" style="background-color: #f8fafc;">
+                            <span class="badge bg-light text-dark border">{{ d.spray_lance or 'Lanza 2 Boquillas' }}</span>
+                        </td>
+                        {% endif %}
+
+                        <!-- Product Columns (1 row per product in mix) -->
                         <td class="fw-bold text-primary">{{ d.product_code }}</td>
                         <td class="text-center">{{ d.unit }}</td>
                         <td class="text-end">{{ d.dose }}</td>
                         <td class="text-end fw-bold text-dark">{{ d.product_amount|format_product(d.unit) }}</td>
-                        <td class="text-end fw-bold">{{ d.total_liters|format_number(1) }}</td>
-                        <td class="text-end">{{ d.liters_per_bed|format_number(1) }}</td>
                         <td class="small text-truncate" style="max-width: 80px;" title="{{ d.pest or '-' }}">{{ d.pest or '-' }}</td>
                         <td class="small text-muted text-truncate" style="max-width: 80px;" title="{{ d.active_ingredient or '-' }}">{{ d.active_ingredient or '-' }}</td>
                         <td class="text-center fw-bold">{{ d.toxicological_category or '-' }}</td>
@@ -415,9 +426,13 @@ tr {
                             <div class="ct-box-empty">-</div>
                             {% endif %}
                         </td>
-                        <td class="fw-semibold small text-dark cell-operator-name" style="background-color: #f8fafc;">
+
+                        {% if loop.first %}
+                        <!-- Operator Box (rowspan across all products in block) -->
+                        <td rowspan="{{ num_rows }}" class="fw-semibold small text-dark cell-operator-name align-middle" style="background-color: #f8fafc;">
                             <span contenteditable="true" class="editable-print-field py-0 px-1">{{ d.operator }}</span>
                         </td>
+                        {% endif %}
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -430,9 +445,12 @@ tr {
                             <i class="fa-solid fa-layer-group text-primary me-1"></i> SUBTOTAL {{ z_info.zone_name }}:
                         </td>
                         <td class="text-end fw-bold text-primary cell-zone-beds">{{ z_info.total_beds|format_number(2) }}</td>
-                        <td colspan="5" class="small bg-white p-1">
+                        <td class="text-center"></td>
+                        <td class="text-end fw-bold text-success cell-zone-liters">{{ z_info.total_liters|format_number(1) }} L</td>
+                        <td colspan="2"></td>
+                        <td colspan="8" class="small bg-white p-1 cell-zone-products-container">
                             {% if z_info.liquid_products %}
-                            <div class="mb-1">
+                            <div class="mb-1 zone-liq-line">
                                 <span class="badge bg-primary-subtle text-primary border border-primary-subtle me-1"><i class="fa-solid fa-droplet me-1"></i>Líq:</span>
                                 {% for lp in z_info.liquid_products %}
                                 <strong>{{ lp.product_code }}</strong>: {{ lp.total_amount|format_product(lp.unit) }} {{ lp.unit }}{% if not loop.last %} &bull; {% endif %}
@@ -440,7 +458,7 @@ tr {
                             </div>
                             {% endif %}
                             {% if z_info.solid_products %}
-                            <div>
+                            <div class="zone-sol-line">
                                 <span class="badge bg-warning-subtle text-dark border border-warning-subtle me-1"><i class="fa-solid fa-box me-1"></i>Sól:</span>
                                 {% for sp in z_info.solid_products %}
                                 <strong>{{ sp.product_code }}</strong>: {{ sp.total_amount|format_product(sp.unit) }} {{ sp.unit }}{% if not loop.last %} &bull; {% endif %}
@@ -448,19 +466,47 @@ tr {
                             </div>
                             {% endif %}
                         </td>
-                        <td class="text-end fw-bold text-success cell-zone-liters">{{ z_info.total_liters|format_number(1) }} L</td>
-                        <td colspan="6"></td>
+                        <td></td>
                     </tr>
                 </tbody>
+
+                <!-- Repeated Column Header between Zones for Perfect Field Reading -->
+                {% if not loop.last %}
+                <tbody class="zone-repeat-header-tbody">
+                    <tr class="order-header-row bg-dark text-white">
+                        <th style="width: 32px;">VTA</th>
+                        <th style="width: 38px;">DÍA</th>
+                        <th style="width: 42px;">FECHA</th>
+                        <th style="width: 50px;">ZONA</th>
+                        <th style="width: 55px;">BLOQUE</th>
+                        <th style="width: 70px;">VARIEDAD</th>
+                        <th style="width: 36px;">EDAD</th>
+                        <th style="width: 48px;">CAMAS</th>
+                        <th style="width: 70px;">UBICACIÓN</th>
+                        <th style="width: 54px;">LITROS</th>
+                        <th style="width: 42px;">L/CAM</th>
+                        <th style="width: 65px;">LANZA</th>
+                        <th style="width: 80px;">PRODUCTO</th>
+                        <th style="width: 28px;">UM</th>
+                        <th style="width: 36px;">DOSIS</th>
+                        <th style="width: 52px;">TOTAL</th>
+                        <th style="width: 75px;">PLAGA</th>
+                        <th style="width: 75px;">I. ACTIVO</th>
+                        <th style="width: 28px;">CT</th>
+                        <th style="width: 48px;">COLOR</th>
+                        <th style="width: 85px;">OPERARIO</th>
+                    </tr>
+                </tbody>
+                {% endif %}
             {% endfor %}
 
             <tfoot class="table-dark fw-bold text-white">
                 <tr>
                     <td colspan="7" class="text-end">TOTAL GENERAL:</td>
                     <td class="text-end" id="tfoot-total-beds">{{ order.total_standard_beds|format_number(2) }}</td>
-                    <td colspan="5" class="text-end">LITROS TOTALES:</td>
+                    <td class="text-center"></td>
                     <td class="text-end" id="tfoot-total-liters">{{ order.total_liters|format_number(1) }} L</td>
-                    <td colspan="6"></td>
+                    <td colspan="11"></td>
                 </tr>
             </tfoot>
         </table>
@@ -581,11 +627,13 @@ document.addEventListener('DOMContentLoaded', function() {
         let totalLitersGeneral = 0;
         let productTotals = {};
         let zoneTotals = {};
+        let zoneProducts = {};
 
         // Initialize zone counters
         zoneSubtotalTbodies.forEach(zt => {
             const zName = zt.getAttribute('data-zone');
             zoneTotals[zName] = { beds: 0, liters: 0, hasVisible: false };
+            zoneProducts[zName] = {};
         });
 
         blockGroups.forEach(bg => {
@@ -623,12 +671,21 @@ document.addEventListener('DOMContentLoaded', function() {
                         }
                     }
 
-                    // Accumulate product quantities for warehouse summary
+                    // Accumulate product quantities for warehouse summary and zone subtotal
                     if (prodCode && prodCode !== 'SIN PRODUCTO') {
                         if (!productTotals[prodCode]) {
                             productTotals[prodCode] = { amt: 0, unit: unit };
                         }
                         productTotals[prodCode].amt += prodAmt;
+
+                        if (zoneProducts[zName]) {
+                            if (!zoneProducts[zName][prodCode]) {
+                                const uUpper = unit.toUpperCase();
+                                const isLiq = ['CC', 'ML', 'LT', 'L', 'LITROS', 'CENTIMETROS'].includes(uUpper);
+                                zoneProducts[zName][prodCode] = { amt: 0, unit: unit, is_liquid: isLiq };
+                            }
+                            zoneProducts[zName][prodCode].amt += prodAmt;
+                        }
                     }
                 } else {
                     r.style.display = 'none';
@@ -642,28 +699,54 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
 
-        // Update Zone Subtotal rows
+        // Update Zone Subtotal rows & Dynamic Zone Chemical Badges
         zoneSubtotalTbodies.forEach(zt => {
             const zName = zt.getAttribute('data-zone');
             const zInfo = zoneTotals[zName];
             const bedsCell = zt.querySelector('.cell-zone-beds');
             const litersCell = zt.querySelector('.cell-zone-liters');
+            const prodContainer = zt.querySelector('.cell-zone-products-container');
 
-            if (selectedOp === 'ALL' && selectedCat === 'ALL') {
+            if (zInfo && zInfo.hasVisible) {
                 zt.style.display = '';
-                const origBeds = parseFloat(zt.querySelector('.zone-subtotal-row')?.getAttribute('data-orig-beds') || '0');
-                const origLiters = parseFloat(zt.querySelector('.zone-subtotal-row')?.getAttribute('data-orig-liters') || '0');
-                if (bedsCell) bedsCell.textContent = origBeds.toFixed(2);
-                if (litersCell) litersCell.textContent = origLiters.toFixed(1) + ' L';
-            } else {
-                if (zInfo && zInfo.hasVisible) {
-                    zt.style.display = '';
-                    if (bedsCell) bedsCell.textContent = zInfo.beds.toFixed(2);
-                    if (litersCell) litersCell.textContent = zInfo.liters.toFixed(1) + ' L';
-                } else {
-                    zt.style.display = 'none';
+                if (bedsCell) bedsCell.textContent = zInfo.beds.toFixed(2);
+                if (litersCell) litersCell.textContent = zInfo.liters.toFixed(1) + ' L';
+
+                // Render dynamic chemical pills for this zone
+                if (prodContainer && zoneProducts[zName]) {
+                    const zProds = zoneProducts[zName];
+                    let liqHtml = [];
+                    let solHtml = [];
+                    Object.keys(zProds).forEach(code => {
+                        const p = zProds[code];
+                        if (p.amt > 0) {
+                            const formatted = formatAmount(p.amt, p.unit);
+                            const itemStr = `<strong>${code}</strong>: ${formatted} ${p.unit}`;
+                            if (p.is_liquid) {
+                                liqHtml.push(itemStr);
+                            } else {
+                                solHtml.push(itemStr);
+                            }
+                        }
+                    });
+
+                    let finalHtml = '';
+                    if (liqHtml.length > 0) {
+                        finalHtml += `<div class="mb-1"><span class="badge bg-primary-subtle text-primary border border-primary-subtle me-1"><i class="fa-solid fa-droplet me-1"></i>Líq:</span> ${liqHtml.join(' &bull; ')}</div>`;
+                    }
+                    if (solHtml.length > 0) {
+                        finalHtml += `<div><span class="badge bg-warning-subtle text-dark border border-warning-subtle me-1"><i class="fa-solid fa-box me-1"></i>Sól:</span> ${solHtml.join(' &bull; ')}</div>`;
+                    }
+                    prodContainer.innerHTML = finalHtml || '<span class="text-muted small">Sin agroquímicos aplicados en este filtro</span>';
                 }
+            } else {
+                zt.style.display = 'none';
             }
+        });
+
+        // Update Repeated Header rows visibility
+        document.querySelectorAll('#table-main-order tbody.zone-repeat-header-tbody').forEach(hdr => {
+            hdr.style.display = (totalBedsGeneral > 0) ? '' : 'none';
         });
 
         // Update Grand Totals in Footer

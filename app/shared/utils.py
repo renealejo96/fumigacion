@@ -75,10 +75,40 @@ def safe_int(val, default=0) -> int:
     except (ValueError, TypeError):
         return int(default)
 
+def excel_round(val: float, decimals: int = 0) -> float:
+    """
+    Excel-style arithmetic half-up rounding (e.g. 214.5 -> 215, 0.05 -> 0.1).
+    Matches standard Excel REDONDEAR formula.
+    """
+    if val is None:
+        return 0.0
+    from decimal import Decimal, ROUND_HALF_UP
+    try:
+        d = Decimal(str(val))
+        if decimals == 0:
+            return float(d.quantize(Decimal('1'), rounding=ROUND_HALF_UP))
+        else:
+            q = Decimal('10') ** -decimals
+            return float(d.quantize(q, rounding=ROUND_HALF_UP))
+    except Exception:
+        import math
+        factor = 10 ** decimals
+        return math.floor(val * factor + 0.5) / factor
+
+def round_to_tank_step(liters: float, step: int = 20) -> float:
+    """
+    Rounds application liters up to the nearest operator tank marking (default 20 L).
+    For example: 214.5 L -> 220.0 L; 45 L -> 60 L; 100 L -> 100 L.
+    """
+    if not liters or liters <= 0:
+        return 0.0
+    import math
+    return float(math.ceil(liters / step) * step)
+
 def format_product_amount(amount: float, unit: str) -> str:
     """
     Business Rule for Product Quantities:
-    - CC, G, GR, ML, PST: 0 decimals (integers, e.g. 150 CC, 25 GR)
+    - CC, G, GR, ML, PST: 0 decimals (integers, e.g. 215 CC, 25 GR - Excel REDONDEAR)
     - LT, KG, L, K: 1 decimal (e.g. 2.5 LT, 1.2 KG)
     """
     if amount is None:
@@ -86,18 +116,19 @@ def format_product_amount(amount: float, unit: str) -> str:
     val = safe_float(amount, default=0.0)
 
     if is_integer_unit(unit):
-        return f"{int(round(val)):,}"
+        return f"{int(excel_round(val, 0)):,}"
     else:
         u = str(unit or '').strip().upper()
         if u in ['LT', 'KG', 'L', 'K', 'LITROS', 'KILOS']:
             return f"{val:.1f}"
         else:
-            return f"{int(round(val)) if val == int(round(val)) else round(val, 1):,}"
+            r = excel_round(val, 1)
+            return f"{int(r) if r == int(r) else r:,}"
 
 def round_product_amount(amount: float, unit: str) -> float:
     """
-    Rounds product amount according to farm measurement capabilities:
-    - CC, G, GR, ML, PST: exact integer (0 decimals)
+    Rounds product amount according to farm measurement capabilities (Excel REDONDEAR):
+    - CC, G, GR, ML, PST: exact integer (0 decimals, half-up, e.g. 214.5 -> 215)
     - LT, KG, L, K: 1 decimal (or 2 if smaller)
     """
     if amount is None:
@@ -105,9 +136,9 @@ def round_product_amount(amount: float, unit: str) -> float:
     val = safe_float(amount, default=0.0)
 
     if is_integer_unit(unit):
-        return float(int(round(val)))
+        return float(int(excel_round(val, 0)))
     else:
-        return round(val, 2)
+        return excel_round(val, 2)
 
 def is_liquid_unit(unit: str) -> bool:
     """

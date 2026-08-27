@@ -328,6 +328,7 @@ class CalculationEngine:
                     'standard_beds': standard_beds,
                     'liters_per_bed': liters_per_bed,
                     'total_liters': segment_liters,
+                    'spray_lance': seg.get('spray_lance', 'Lanza 2 Boquillas') or 'Lanza 2 Boquillas',
                     'products': products_list,
                     'products_detail': products_detail,
                     'products_summary_text': ", ".join(products_summary_text_parts),

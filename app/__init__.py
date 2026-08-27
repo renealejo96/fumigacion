@@ -91,9 +91,10 @@ def create_app(config_class=Config):
             "ALTER TABLE fumigation_order_product_summaries ALTER COLUMN pest TYPE TEXT",
             "ALTER TABLE requisitions_items ALTER COLUMN pest TYPE TEXT",
             "ALTER TABLE requisitions_items ALTER COLUMN product_code TYPE VARCHAR(255)",
-            "ALTER TABLE requisitions_items ALTER COLUMN commercial_name TYPE VARCHAR(255)",
             "ALTER TABLE additional_applications ALTER COLUMN reason TYPE TEXT",
-            "ALTER TABLE additional_applications ALTER COLUMN notes TYPE TEXT"
+            "ALTER TABLE additional_applications ALTER COLUMN notes TYPE TEXT",
+            "ALTER TABLE fumigation_order_details ADD COLUMN IF NOT EXISTS spray_lance VARCHAR(100) DEFAULT 'Lanza 2 Boquillas'",
+            "ALTER TABLE additional_applications ADD COLUMN IF NOT EXISTS spray_lance VARCHAR(100) DEFAULT 'Lanza 2 Boquillas'"
         ]
         for m in migrations:
             try:
