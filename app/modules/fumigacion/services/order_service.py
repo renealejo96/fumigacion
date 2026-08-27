@@ -13,9 +13,24 @@ class OrderService:
     def generate_order_number(week: str, round_number: int) -> str:
         clean_week = str(week).replace(' ', '').replace('/', '-')
         prefix = f"ORD-FUM-{clean_week}-V{round_number}"
-        existing_count = FumigationOrder.query.filter(FumigationOrder.order_number.like(f"{prefix}%")).count()
-        seq = existing_count + 1
-        return f"{prefix}-{seq:03d}"
+        existing_orders = FumigationOrder.query.filter(FumigationOrder.order_number.like(f"{prefix}%")).all()
+        
+        max_seq = 0
+        import re
+        for o in existing_orders:
+            num_part = o.order_number.replace(prefix, '').strip('-')
+            digits = re.findall(r'\d+', num_part)
+            if digits:
+                max_seq = max(max_seq, int(digits[0]))
+        
+        seq = max_seq + 1
+        candidate = f"{prefix}-{seq:03d}"
+        
+        while FumigationOrder.query.filter_by(order_number=candidate).first():
+            seq += 1
+            candidate = f"{prefix}-{seq:03d}"
+            
+        return candidate
 
     @classmethod
     def create_order_from_round(cls, round_id: int, agronomist: str = "Agrónomo Responsable", notes: str = None, custom_segments: list = None) -> FumigationOrder:

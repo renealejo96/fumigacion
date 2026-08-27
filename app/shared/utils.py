@@ -33,6 +33,48 @@ def is_integer_unit(unit: str) -> bool:
     u = str(unit).strip().upper()
     return u in ['CC', 'G', 'GR', 'ML', 'PST', 'PST.', 'GRAMOS', 'CENTIMETROS', 'CM3', 'UNIDAD', 'UNIDADES', 'TAB', 'TABLETA', 'UND', 'UN']
 
+def safe_float(val, default=0.0) -> float:
+    """
+    Safely converts a value (string, None, int, float, localized number with comma) to a float.
+    Never raises an exception; returns `default` on error or empty string.
+    """
+    if val is None:
+        return float(default)
+    if isinstance(val, (int, float)):
+        import math
+        if math.isnan(val) or math.isinf(val):
+            return float(default)
+        return float(val)
+    try:
+        s = str(val).strip().replace(',', '.')
+        if not s or s.lower() in ('none', 'nan', 'null', 'undefined'):
+            return float(default)
+        return float(s)
+    except (ValueError, TypeError):
+        return float(default)
+
+def safe_int(val, default=0) -> int:
+    """
+    Safely converts a value to an integer (handling strings like '1.0', '1,0', None, NaN).
+    Never raises an exception; returns `default` on error or empty string.
+    """
+    if val is None:
+        return int(default)
+    if isinstance(val, int):
+        return val
+    if isinstance(val, float):
+        import math
+        if math.isnan(val) or math.isinf(val):
+            return int(default)
+        return int(round(val))
+    try:
+        s = str(val).strip().replace(',', '.')
+        if not s or s.lower() in ('none', 'nan', 'null', 'undefined'):
+            return int(default)
+        return int(round(float(s)))
+    except (ValueError, TypeError):
+        return int(default)
+
 def format_product_amount(amount: float, unit: str) -> str:
     """
     Business Rule for Product Quantities:
@@ -41,10 +83,7 @@ def format_product_amount(amount: float, unit: str) -> str:
     """
     if amount is None:
         return "0"
-    try:
-        val = float(amount)
-    except (ValueError, TypeError):
-        return str(amount)
+    val = safe_float(amount, default=0.0)
 
     if is_integer_unit(unit):
         return f"{int(round(val)):,}"
@@ -63,10 +102,7 @@ def round_product_amount(amount: float, unit: str) -> float:
     """
     if amount is None:
         return 0.0
-    try:
-        val = float(amount)
-    except (ValueError, TypeError):
-        return 0.0
+    val = safe_float(amount, default=0.0)
 
     if is_integer_unit(unit):
         return float(int(round(val)))

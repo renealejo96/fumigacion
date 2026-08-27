@@ -1349,17 +1349,31 @@ document.addEventListener('DOMContentLoaded', function() {
         const allSegments = [];
 
         rows.forEach(tr => {
-            const zone = tr.querySelector('.seg-zone')?.value.trim() || '';
-            const block = tr.querySelector('.seg-block')?.value.trim() || '';
-            const suffix = tr.querySelector('.seg-suffix')?.value.trim() || 'A';
-            const crop = tr.querySelector('.seg-crop')?.value.trim() || '';
-            const variety = tr.querySelector('.seg-variety')?.value.trim() || crop;
-            const stage = tr.querySelector('.seg-stage')?.value || 'VEGETATIVO';
-            const age = tr.querySelector('.seg-age')?.value.trim() || '';
-            const bedStart = parseInt(tr.querySelector('.seg-bed-start')?.value) || 1;
-            const bedEnd = parseInt(tr.querySelector('.seg-bed-end')?.value) || 1;
-            const stdBeds = parseFloat(tr.querySelector('.seg-std-beds')?.value) || 1.0;
-            const litBed = parseFloat(tr.querySelector('.seg-liters-bed')?.value) || 0;
+            const zone = (tr.querySelector('.seg-zone')?.value || tr.dataset.zone || '').trim();
+            const block = (tr.querySelector('.seg-block')?.value || tr.dataset.block || '').trim();
+            const suffix = (tr.querySelector('.seg-suffix')?.value || tr.dataset.suffix || 'A').trim().toUpperCase();
+            const crop = (tr.querySelector('.seg-crop')?.value || tr.dataset.crop || '').trim();
+            const variety = (tr.querySelector('.seg-variety')?.value || tr.dataset.variety || crop).trim();
+            const stage = (tr.querySelector('.seg-stage')?.value || tr.dataset.stage || 'VEGETATIVO').trim().toUpperCase();
+            const age = (tr.querySelector('.seg-age')?.value || '').trim();
+            
+            const rawBedStart = (tr.querySelector('.seg-bed-start')?.value || '1').toString().trim().replace(',', '.');
+            const rawBedEnd = (tr.querySelector('.seg-bed-end')?.value || '1').toString().trim().replace(',', '.');
+            const rawStd = (tr.querySelector('.seg-std-beds')?.value || '1').toString().trim().replace(',', '.');
+            const rawLit = (tr.querySelector('.seg-liters-bed')?.value || '0').toString().trim().replace(',', '.');
+
+            let bedStart = parseInt(rawBedStart, 10);
+            if (isNaN(bedStart) || bedStart < 1) bedStart = 1;
+
+            let bedEnd = parseInt(rawBedEnd, 10);
+            if (isNaN(bedEnd) || bedEnd < bedStart) bedEnd = bedStart;
+
+            let stdBeds = parseFloat(rawStd);
+            if (isNaN(stdBeds) || stdBeds < 0) stdBeds = 1.0;
+
+            let litBed = parseFloat(rawLit);
+            if (isNaN(litBed) || litBed < 0) litBed = 0.0;
+
             const isCustomMix = tr.querySelector('.seg-custom-mix')?.value === 'true';
 
             let prods = [];
@@ -1367,6 +1381,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 prods = JSON.parse(tr.querySelector('.seg-products-json')?.value || '[]');
             } catch (e) {
                 prods = [];
+            }
+
+            if (Array.isArray(prods)) {
+                prods.forEach(p => {
+                    if (p && p.dose !== undefined) {
+                        const dStr = String(p.dose).trim().replace(',', '.');
+                        const parsedDose = parseFloat(dStr);
+                        p.dose = isNaN(parsedDose) ? 0.0 : parsedDose;
+                    }
+                });
             }
 
             allSegments.push({

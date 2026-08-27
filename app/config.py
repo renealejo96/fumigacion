@@ -16,22 +16,32 @@ class Config:
         
     sqlite_url = f'sqlite:///{DB_PATH}'
     
-    # Check if PostgreSQL connection can be established, otherwise use SQLite
-    if not pg_url or 'sqlite' in pg_url:
-        SQLALCHEMY_DATABASE_URI = sqlite_url
-    else:
+    use_pg = False
+    if pg_url and 'sqlite' not in pg_url:
         try:
             from sqlalchemy import create_engine
-            engine = create_engine(pg_url, connect_args={'connect_timeout': 3})
-            with engine.connect() as conn:
-                pass
-            SQLALCHEMY_DATABASE_URI = pg_url
-            print(f"[Database] Connected to PostgreSQL: {pg_url.split('@')[-1] if '@' in pg_url else 'configured DB'}")
-        except Exception as e:
-            print(f"[Database] PostgreSQL connection failed ({e}). Falling back to SQLite database at {DB_PATH}")
-            SQLALCHEMY_DATABASE_URI = sqlite_url
+            test_engine = create_engine(pg_url, connect_args={'connect_timeout': 3})
+            with test_engine.connect() as conn:
+                use_pg = True
+        except Exception:
+            use_pg = False
+
+    if use_pg:
+        SQLALCHEMY_DATABASE_URI = pg_url
+        SQLALCHEMY_ENGINE_OPTIONS = {
+            'pool_size': int(os.environ.get('DB_POOL_SIZE', 10)),
+            'max_overflow': int(os.environ.get('DB_MAX_OVERFLOW', 20)),
+            'pool_timeout': 30,
+            'pool_recycle': 1800,
+            'pool_pre_ping': True,
+        }
+    else:
+        SQLALCHEMY_DATABASE_URI = sqlite_url
+        SQLALCHEMY_ENGINE_OPTIONS = {
+            'connect_args': {'timeout': 30}
+        }
 
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     UPLOAD_FOLDER = str(BASE_DIR / 'uploads')
     MAX_CONTENT_LENGTH = 64 * 1024 * 1024  # 64 MB
-    DEBUG = True
+    DEBUG = os.environ.get('FLASK_DEBUG', 'false').lower() in ('true', '1', 't')

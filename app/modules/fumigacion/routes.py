@@ -15,7 +15,8 @@ from app.modules.fumigacion.services.requisition_service import RequisitionServi
 from app.shared.utils import (
     get_operator_for_zone, get_toxicological_color_info, 
     get_local_now, format_local_datetime, 
-    is_integer_unit, round_product_amount, is_liquid_unit, is_solid_unit
+    is_integer_unit, round_product_amount, is_liquid_unit, is_solid_unit,
+    safe_float, safe_int
 )
 from app.shared.audit import record_audit
 from app.modules.auth.routes import login_required, permission_required, admin_required
@@ -464,63 +465,95 @@ def rotacion_guardar_revision(rotation_id):
     - If target_round_id is provided, assigns segments to that specific round, automatically generates/updates the official FumigationOrder, and syncs Requisition.
     - If target_round_id is not provided, saves as active working draft in review_data_json.
     """
-    rotation = Rotation.query.get_or_404(rotation_id)
-    data = request.get_json() or {}
-    segments = data.get('segments', [])
-    target_round_id = data.get('target_round_id')
+    try:
+        rotation = Rotation.query.get_or_404(rotation_id)
+        data = request.get_json() or {}
+        segments = data.get('segments', [])
+        target_round_id = data.get('target_round_id')
 
-    if not segments:
-        return jsonify({'success': False, 'error': 'No hay datos de segmentos para guardar.'}), 400
+        if not segments:
+            return jsonify({'success': False, 'error': 'No hay datos de segmentos para guardar.'}), 400
 
-    # Always persist working draft
-    rotation.review_data_json = json.dumps(segments, ensure_ascii=False)
+        # Sanitize segments before storing
+        clean_segments = []
+        for s in segments:
+            if not isinstance(s, dict):
+                continue
+            clean_s = dict(s)
+            clean_s['bed_start'] = safe_int(s.get('bed_start'), default=1)
+            clean_s['bed_end'] = safe_int(s.get('bed_end'), default=max(1, clean_s['bed_start']))
+            clean_s['standard_beds'] = round(safe_float(s.get('standard_beds'), default=1.0), 2)
+            clean_s['liters_per_bed'] = round(safe_float(s.get('liters_per_bed'), default=0.0), 1)
+            
+            prods = s.get('products', [])
+            clean_prods = []
+            if isinstance(prods, list):
+                for p in prods:
+                    if isinstance(p, dict):
+                        clean_p = dict(p)
+                        clean_p['dose'] = safe_float(p.get('dose'), default=0.0)
+                        clean_prods.append(clean_p)
+            clean_s['products'] = clean_prods
+            clean_segments.append(clean_s)
 
-    msg = "Ajustes de camas guardados como borrador de trabajo."
+        # Always persist working draft
+        rotation.review_data_json = json.dumps(clean_segments, ensure_ascii=False)
 
-    if target_round_id:
-        target_round = RotationRound.query.get(target_round_id)
-        r_name = target_round.name if target_round else f"Vuelta #{target_round_id}"
-        
-        # Load review data by round
-        review_by_round = {}
-        if rotation.review_data_by_round_json:
-            try:
-                review_by_round = json.loads(rotation.review_data_by_round_json)
-            except:
-                review_by_round = {}
+        msg = "Ajustes de camas guardados como borrador de trabajo."
 
-        review_by_round[str(target_round_id)] = segments
-        rotation.review_data_by_round_json = json.dumps(review_by_round, ensure_ascii=False)
-        db.session.commit()
-        
-        # Automatically generate/freeze official FumigationOrder for this assigned round
-        OrderService.create_order_from_round(target_round_id, agronomist=rotation.created_by, custom_segments=segments)
-
-        # Sync with requisition to update Paso 3 consumption
-        RequisitionService.sync_with_final_orders(rotation.id)
-        
-        msg = f"Camas y mezcla asignadas exitosamente a {r_name}. Orden de Fumigación Oficial y Requisición actualizadas."
-        record_audit('FUMIGACION', 'ASSIGN_REVIEW_TO_ROUND', 'Rotation', rotation.id, 
-                     details={'target_round_id': target_round_id, 'round_name': r_name, 'segments_count': len(segments)})
-    else:
-        # If target_round_id is None (Saved draft), sync with first round if review_data_by_round_json is empty
-        all_rounds = RotationRound.query.filter_by(rotation_id=rotation.id).order_by(RotationRound.round_number.asc()).all()
-        if all_rounds:
-            first_round_id = all_rounds[0].id
+        if target_round_id:
+            target_round_id_int = safe_int(target_round_id)
+            target_round = RotationRound.query.get(target_round_id_int)
+            if not target_round:
+                return jsonify({'success': False, 'error': f'La vuelta #{target_round_id} no fue encontrada en la base de datos.'}), 404
+            
+            r_name = target_round.name or f"Vuelta #{target_round_id_int}"
+            
+            # Load review data by round
             review_by_round = {}
             if rotation.review_data_by_round_json:
                 try:
                     review_by_round = json.loads(rotation.review_data_by_round_json)
-                except:
+                except Exception:
                     review_by_round = {}
-            review_by_round[str(first_round_id)] = segments
+
+            review_by_round[str(target_round_id_int)] = clean_segments
             rotation.review_data_by_round_json = json.dumps(review_by_round, ensure_ascii=False)
+            db.session.commit()
+            
+            # Automatically generate/freeze official FumigationOrder for this assigned round
+            OrderService.create_order_from_round(target_round_id_int, agronomist=rotation.created_by, custom_segments=clean_segments)
 
-        db.session.commit()
-        record_audit('FUMIGACION', 'SAVE_REVIEW_DRAFT', 'Rotation', rotation.id, 
-                     details={'segments_count': len(segments)})
+            # Sync with requisition to update Paso 3 consumption
+            RequisitionService.sync_with_final_orders(rotation.id)
+            
+            msg = f"Camas y mezcla asignadas exitosamente a {r_name}. Orden de Fumigación Oficial y Requisición actualizadas."
+            record_audit('FUMIGACION', 'ASSIGN_REVIEW_TO_ROUND', 'Rotation', rotation.id, 
+                         details={'target_round_id': target_round_id_int, 'round_name': r_name, 'segments_count': len(clean_segments)})
+        else:
+            # If target_round_id is None (Saved draft), sync with first round if review_data_by_round_json is empty
+            all_rounds = RotationRound.query.filter_by(rotation_id=rotation.id).order_by(RotationRound.round_number.asc()).all()
+            if all_rounds:
+                first_round_id = all_rounds[0].id
+                review_by_round = {}
+                if rotation.review_data_by_round_json:
+                    try:
+                        review_by_round = json.loads(rotation.review_data_by_round_json)
+                    except Exception:
+                        review_by_round = {}
+                review_by_round[str(first_round_id)] = clean_segments
+                rotation.review_data_by_round_json = json.dumps(review_by_round, ensure_ascii=False)
 
-    return jsonify({'success': True, 'message': msg})
+            db.session.commit()
+            record_audit('FUMIGACION', 'SAVE_REVIEW_DRAFT', 'Rotation', rotation.id, 
+                         details={'segments_count': len(clean_segments)})
+
+        return jsonify({'success': True, 'message': msg})
+    except Exception as e:
+        db.session.rollback()
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': f'Error al procesar asignación de vuelta: {str(e)}'}), 500
 
 
 @fumigacion_bp.route('/rotaciones/<int:rotation_id>/get-cumulative', methods=['GET'])

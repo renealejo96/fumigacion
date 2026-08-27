@@ -2,7 +2,11 @@ import math
 import json
 from app.extensions import db
 from app.shared.models import Crop, Product, Litraje, CropStateRecord, AdditionalApplication
-from app.shared.utils import get_operator_for_zone, get_toxicological_color_info, is_integer_unit, round_product_amount
+from app.shared.utils import (
+    get_operator_for_zone, get_toxicological_color_info, 
+    is_integer_unit, round_product_amount,
+    safe_float, safe_int
+)
 
 class CalculationEngine:
 
@@ -225,11 +229,13 @@ class CalculationEngine:
             total_beds_count = 0
 
             for seg in custom_review_segments:
-                block_full = seg.get('block_name', '')
-                suffix = seg.get('suffix', 'A')
-                crop_name = seg.get('crop_name', '')
-                variety = seg.get('variety', '')
-                stage = seg.get('phenological_stage', 'VEGETATIVO')
+                if not isinstance(seg, dict):
+                    continue
+                block_full = (seg.get('block_name') or '').strip()
+                suffix = (seg.get('suffix') or 'A').strip().upper()
+                crop_name = (seg.get('crop_name') or '').strip()
+                variety = (seg.get('variety') or crop_name).strip()
+                stage = (seg.get('phenological_stage') or 'VEGETATIVO').strip().upper()
                 raw_age = seg.get('real_age', '')
                 if raw_age is None:
                     real_age = ''
@@ -239,13 +245,15 @@ class CalculationEngine:
                     real_age = str(raw_age).strip()
                     if real_age.endswith('.0'):
                         real_age = real_age[:-2]
-                bed_start = int(seg.get('bed_start', 1))
-                bed_end = int(seg.get('bed_end', 1))
+                bed_start = safe_int(seg.get('bed_start'), default=1)
+                bed_end = safe_int(seg.get('bed_end'), default=max(1, bed_start))
+                if bed_start > bed_end:
+                    bed_start, bed_end = bed_end, bed_start
                 bed_count = max(1, bed_end - bed_start + 1)
-                standard_beds = round(float(seg.get('standard_beds', 1.0)), 2)
-                liters_per_bed = round(float(seg.get('liters_per_bed', 0.0)), 1)
+                standard_beds = round(safe_float(seg.get('standard_beds'), default=1.0), 2)
+                liters_per_bed = round(safe_float(seg.get('liters_per_bed'), default=0.0), 1)
                 segment_liters = round(standard_beds * liters_per_bed, 1)
-                zone = seg.get('zone', '')
+                zone = (seg.get('zone') or '').strip()
                 operator = seg.get('operator') or get_operator_for_zone(zone)
                 bed_range_str = seg.get('bed_range', f"Camas {bed_start}-{bed_end}")
 
@@ -254,48 +262,51 @@ class CalculationEngine:
                 products_detail = []
                 products_summary_text_parts = []
 
-                for it_idx, it in enumerate(products_list):
-                    prod_id = it.get('product_id')
-                    prod_code = it.get('product_code', 'N/A')
-                    comm_name = it.get('commercial_name', prod_code)
-                    dose = float(it.get('dose', 0.0) or 0.0)
-                    dose_unit = it.get('dose_unit', 'CC')
-                    pest = it.get('pest', '')
-                    ia = it.get('active_ingredient', '')
-                    ct = it.get('toxicological_category', '')
-                    color_info = get_toxicological_color_info(ct)
+                if isinstance(products_list, list):
+                    for it_idx, it in enumerate(products_list):
+                        if not isinstance(it, dict):
+                            continue
+                        prod_id = it.get('product_id')
+                        prod_code = (it.get('product_code') or 'N/A').strip()
+                        comm_name = (it.get('commercial_name') or prod_code).strip()
+                        dose = safe_float(it.get('dose'), default=0.0)
+                        dose_unit = (it.get('dose_unit') or 'CC').strip()
+                        pest = (it.get('pest') or '').strip()
+                        ia = (it.get('active_ingredient') or '').strip()
+                        ct = (it.get('toxicological_category') or '').strip()
+                        color_info = get_toxicological_color_info(ct)
 
-                    product_amount = round_product_amount(segment_liters * dose, dose_unit)
+                        product_amount = round_product_amount(segment_liters * dose, dose_unit)
 
-                    products_detail.append({
-                        'product_id': prod_id,
-                        'product_code': prod_code,
-                        'commercial_name': comm_name,
-                        'dose': dose,
-                        'dose_unit': dose_unit,
-                        'product_amount': product_amount,
-                        'pest': pest,
-                        'active_ingredient': ia,
-                        'toxicological_category': ct,
-                        'toxicological_color': color_info['name'],
-                        'color_info': color_info,
-                        'order_in_mix': it_idx
-                    })
-
-                    products_summary_text_parts.append(f"{prod_code} ({dose} {dose_unit}/L)")
-
-                    summary_key = (prod_code, dose, dose_unit)
-                    if summary_key not in product_summary_map:
-                        product_summary_map[summary_key] = {
+                        products_detail.append({
                             'product_id': prod_id,
                             'product_code': prod_code,
                             'commercial_name': comm_name,
                             'dose': dose,
                             'dose_unit': dose_unit,
+                            'product_amount': product_amount,
                             'pest': pest,
-                            'total_required_quantity': 0.0
-                        }
-                    product_summary_map[summary_key]['total_required_quantity'] += product_amount
+                            'active_ingredient': ia,
+                            'toxicological_category': ct,
+                            'toxicological_color': color_info['name'],
+                            'color_info': color_info,
+                            'order_in_mix': it_idx
+                        })
+
+                        products_summary_text_parts.append(f"{prod_code} ({dose} {dose_unit}/L)")
+
+                        summary_key = (prod_code, dose, dose_unit)
+                        if summary_key not in product_summary_map:
+                            product_summary_map[summary_key] = {
+                                'product_id': prod_id,
+                                'product_code': prod_code,
+                                'commercial_name': comm_name,
+                                'dose': dose,
+                                'dose_unit': dose_unit,
+                                'pest': pest,
+                                'total_required_quantity': 0.0
+                            }
+                        product_summary_map[summary_key]['total_required_quantity'] += product_amount
 
                 segment_data = {
                     'round_number': round_obj.round_number,
@@ -332,16 +343,16 @@ class CalculationEngine:
             # Sort segments sequentially: ZONA -> BLOQUE (natural) -> SUFIJO -> CAMA INICIO -> CAMA FIN
             import re
             def get_seg_sort_key(s):
-                b_name = s.get('block_name') or ''
+                b_name = str(s.get('block_name') or '')
                 digits = re.findall(r'\d+', b_name)
                 b_num = int(digits[0]) if digits else 99999
                 return (
-                    s.get('zone') or '',
+                    str(s.get('zone') or ''),
                     b_num,
                     b_name,
-                    s.get('suffix') or 'A',
-                    int(s.get('bed_start') or 0),
-                    int(s.get('bed_end') or 0)
+                    str(s.get('suffix') or 'A'),
+                    safe_int(s.get('bed_start'), default=0),
+                    safe_int(s.get('bed_end'), default=0)
                 )
 
             segments.sort(key=get_seg_sort_key)

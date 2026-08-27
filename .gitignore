@@ -19,6 +19,8 @@ venv.bak/
 
 # SQLite Database Files
 *.db
+*.db-shm
+*.db-wal
 *.sqlite3
 fumigacion_agricola.db
 

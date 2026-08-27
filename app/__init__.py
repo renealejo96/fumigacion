@@ -2,7 +2,10 @@ import os
 from flask import Flask, render_template, session, g
 from app.config import Config
 from app.extensions import db
-from app.shared.utils import format_product_amount, format_age, format_local_datetime, is_liquid_unit, is_solid_unit
+from app.shared.utils import (
+    format_product_amount, format_age, format_local_datetime, 
+    is_liquid_unit, is_solid_unit, safe_float, safe_int
+)
 
 def create_app(config_class=Config):
     app = Flask(__name__)
@@ -11,13 +14,29 @@ def create_app(config_class=Config):
     # Initialize extensions
     db.init_app(app)
 
+    # Concurrency optimization: Enable WAL mode & busy timeout if SQLite is used
+    if 'sqlite' in str(app.config.get('SQLALCHEMY_DATABASE_URI', '')):
+        from sqlalchemy import event
+        from sqlalchemy.engine import Engine
+
+        @event.listens_for(Engine, "connect")
+        def set_sqlite_pragma(dbapi_connection, connection_record):
+            try:
+                cursor = dbapi_connection.cursor()
+                cursor.execute("PRAGMA journal_mode=WAL")
+                cursor.execute("PRAGMA synchronous=NORMAL")
+                cursor.execute("PRAGMA busy_timeout=30000")
+                cursor.close()
+            except Exception:
+                pass
+
     # Register Jinja2 filters
     @app.template_filter('format_number')
     def filter_format_number(val, decimals=2):
         if val is None:
             return "0"
         try:
-            f = float(val)
+            f = safe_float(val, default=0.0)
             if decimals == 0:
                 return f"{int(round(f)):,}"
             return f"{f:,.{decimals}f}"
@@ -116,7 +135,11 @@ def create_app(config_class=Config):
         if 'user_id' not in session:
             return redirect(url_for('auth.login'))
 
-        from app.shared.models import Crop, Product, CropStateRecord, Rotation, FumigationOrder
+        from app.shared.models import (
+            Crop, Product, CropStateRecord, 
+            Rotation, RotationRound, RotationRoundItem, 
+            FumigationOrder
+        )
         crops_count = Crop.query.filter_by(is_active=True).count()
         products_count = Product.query.filter_by(is_active=True).count()
         beds_count = CropStateRecord.query.count()
