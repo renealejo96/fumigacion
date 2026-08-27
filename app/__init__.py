@@ -70,14 +70,34 @@ def create_app(config_class=Config):
 
     # Safe dynamic column migrations
     with app.app_context():
-        try:
-            from sqlalchemy import text
-            db.session.execute(text("ALTER TABLE crops ADD COLUMN IF NOT EXISTS category VARCHAR(50) DEFAULT 'PRODUCTOS_NUEVOS'"))
-            db.session.commit()
-        except Exception:
-            db.session.rollback()
+        from sqlalchemy import text
+        migrations = [
+            "ALTER TABLE crops ADD COLUMN IF NOT EXISTS category VARCHAR(50) DEFAULT 'PRODUCTOS_NUEVOS'",
+            "ALTER TABLE fumigation_order_details ALTER COLUMN bed_range TYPE TEXT",
+            "ALTER TABLE fumigation_order_details ALTER COLUMN real_age TYPE VARCHAR(255)",
+            "ALTER TABLE fumigation_order_details ALTER COLUMN crop_name TYPE VARCHAR(255)",
+            "ALTER TABLE fumigation_order_details ALTER COLUMN variety_specific TYPE VARCHAR(255)",
+            "ALTER TABLE fumigation_order_details ALTER COLUMN product_code TYPE VARCHAR(255)",
+            "ALTER TABLE fumigation_order_details ALTER COLUMN commercial_name TYPE VARCHAR(255)",
+            "ALTER TABLE fumigation_order_details ALTER COLUMN operator TYPE VARCHAR(255)",
+            "ALTER TABLE fumigation_order_details ALTER COLUMN zone TYPE VARCHAR(255)",
+            "ALTER TABLE fumigation_order_details ALTER COLUMN block_name TYPE VARCHAR(100)",
+            "ALTER TABLE fumigation_order_details ALTER COLUMN suffix TYPE VARCHAR(50)",
+            "ALTER TABLE fumigation_order_details ALTER COLUMN phenological_stage TYPE VARCHAR(100)",
+            "ALTER TABLE fumigation_order_details ALTER COLUMN pest TYPE TEXT",
+            "ALTER TABLE fumigation_order_details ALTER COLUMN active_ingredient TYPE TEXT",
+            "ALTER TABLE fumigation_order_product_summaries ALTER COLUMN product_code TYPE VARCHAR(255)",
+            "ALTER TABLE fumigation_order_product_summaries ALTER COLUMN commercial_name TYPE VARCHAR(255)",
+            "ALTER TABLE fumigation_order_product_summaries ALTER COLUMN pest TYPE TEXT",
+            "ALTER TABLE requisitions_items ALTER COLUMN pest TYPE TEXT",
+            "ALTER TABLE requisitions_items ALTER COLUMN product_code TYPE VARCHAR(255)",
+            "ALTER TABLE requisitions_items ALTER COLUMN commercial_name TYPE VARCHAR(255)",
+            "ALTER TABLE additional_applications ALTER COLUMN reason TYPE TEXT",
+            "ALTER TABLE additional_applications ALTER COLUMN notes TYPE TEXT"
+        ]
+        for m in migrations:
             try:
-                db.session.execute(text("ALTER TABLE crops ADD COLUMN category VARCHAR(50) DEFAULT 'PRODUCTOS_NUEVOS'"))
+                db.session.execute(text(m))
                 db.session.commit()
             except Exception:
                 db.session.rollback()
