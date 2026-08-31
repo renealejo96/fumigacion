@@ -363,6 +363,12 @@ def exportar_salidas_excel(rotation_id):
         flash("No hay órdenes oficiales aprobadas para esta consulta.", "warning")
         return redirect(url_for('bodega.salidas', rotation_id=rotation_id))
 
+    # 1. Build flat detailed database rows (exact reflection of program view across all orders/vueltas)
+    all_details = [d for o in orders for d in o.details]
+    flat_rows = OrderService.get_order_details_rows(all_details)
+    df_flat = pd.DataFrame(flat_rows)
+
+    # 2. Build summary matrix by area and scheduled day
     scheduled_days = []
     for ord in orders:
         if ord.scheduled_day and ord.scheduled_day not in scheduled_days:
@@ -395,7 +401,7 @@ def exportar_salidas_excel(rotation_id):
             if day in data_by_area[area][product_code]:
                 data_by_area[area][product_code][day] += amount
 
-    rows = []
+    rows_matrix = []
     for area in sorted(data_by_area.keys()):
         for product_code in sorted(data_by_area[area].keys()):
             u = product_info[product_code]['unit']
@@ -412,18 +418,35 @@ def exportar_salidas_excel(rotation_id):
                 row[day] = int(round(qty)) if is_int else round(qty, 1)
                 total += qty
             row['Total General Despacho'] = int(round(total)) if is_int else round(total, 1)
-            rows.append(row)
+            rows_matrix.append(row)
 
-    df = pd.DataFrame(rows)
+    df_matrix = pd.DataFrame(rows_matrix)
+
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df.to_excel(writer, sheet_name=f"Salidas_Bodega_{rotation.week}", index=False)
+        sheet_flat_name = f"Programa_Sem_{rotation.week}"[:31]
+        sheet_matrix_name = f"Matriz_Salidas_{rotation.week}"[:31]
 
-        ws = writer.sheets[f"Salidas_Bodega_{rotation.week}"]
-        for col in ws.columns:
+        df_flat.to_excel(writer, sheet_name=sheet_flat_name, index=False)
+        if not df_matrix.empty:
+            df_matrix.to_excel(writer, sheet_name=sheet_matrix_name, index=False)
+
+        # Style sheet_flat_name
+        ws_flat = writer.sheets[sheet_flat_name]
+        ws_flat.freeze_panes = 'A2'
+        for col in ws_flat.columns:
             max_len = max(len(str(cell.value or '')) for cell in col)
             col_letter = col[0].column_letter
-            ws.column_dimensions[col_letter].width = max(max_len + 4, 12)
+            ws_flat.column_dimensions[col_letter].width = max(max_len + 3, 11)
+
+        # Style sheet_matrix_name
+        if sheet_matrix_name in writer.sheets:
+            ws_matrix = writer.sheets[sheet_matrix_name]
+            ws_matrix.freeze_panes = 'A2'
+            for col in ws_matrix.columns:
+                max_len = max(len(str(cell.value or '')) for cell in col)
+                col_letter = col[0].column_letter
+                ws_matrix.column_dimensions[col_letter].width = max(max_len + 4, 12)
 
     output.seek(0)
     filename = f"Salidas_Bodega_Semana_{rotation.week}.xlsx"

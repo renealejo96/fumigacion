@@ -13,7 +13,7 @@ from app.shared.utils import is_integer_unit, round_product_amount
 class RequisitionService:
 
     @classmethod
-    def generate_or_update_forecast(cls, rotation_id: int, title: str = None) -> Requisition:
+    def generate_or_update_forecast(cls, rotation_id: int, title: str = None, cached_crop_records=None) -> Requisition:
         """
         Generates or updates the 15-day advance purchase requisition from the rotation plan.
         """
@@ -23,7 +23,7 @@ class RequisitionService:
         total_liters_all = 0.0
 
         for r in rotation.rounds:
-            calc = CalculationEngine.calculate_round(r)
+            calc = CalculationEngine.calculate_round(r, cached_crop_records=cached_crop_records)
             total_liters_all += calc['totals']['total_liters']
 
             for ps in calc['product_summaries']:
@@ -81,7 +81,7 @@ class RequisitionService:
         return req
 
     @classmethod
-    def get_comparison_data(cls, rotation_id: int):
+    def get_comparison_data(cls, rotation_id: int, cached_crop_records=None):
         """
         Builds the unified comparative data between:
         1. Cantidad Comprada (Requisición 15 días)
@@ -93,7 +93,7 @@ class RequisitionService:
         rotation = Rotation.query.get_or_404(rotation_id)
         req = Requisition.query.filter_by(rotation_id=rotation.id).first()
         if not req:
-            req = cls.generate_or_update_forecast(rotation_id)
+            req = cls.generate_or_update_forecast(rotation_id, cached_crop_records=cached_crop_records)
 
         # Forecast items from purchase order
         forecast_by_code = {it.product_code: it for it in req.items}
@@ -135,6 +135,9 @@ class RequisitionService:
         all_codes = list(set(list(forecast_by_code.keys()) + list(orders_by_code.keys()) + list(extras_by_code.keys())))
         all_codes.sort()
 
+        # Batch load all products to avoid N+1 queries
+        products_map = {p.code: p for p in Product.query.all()}
+
         comparison_rows = []
         for code in all_codes:
             f_item = forecast_by_code.get(code)
@@ -142,7 +145,7 @@ class RequisitionService:
             e_item = extras_by_code.get(code)
 
             # Determine product info
-            prod = Product.query.filter_by(code=code).first()
+            prod = products_map.get(code)
             comm_name = prod.commercial_name if prod else (f_item.commercial_name if f_item else (o_item['commercial_name'] if o_item else code))
             unit = prod.unit if prod else (f_item.unit if f_item else (o_item['unit'] if o_item else (e_item['unit'] if e_item else 'CC')))
             pest = prod.pest if prod else (f_item.pest if f_item else (o_item['pest'] if o_item else 'Adicional'))
@@ -240,7 +243,7 @@ class RequisitionService:
         }
 
     @classmethod
-    def get_variety_breakdown_data(cls, rotation_id: int) -> list:
+    def get_variety_breakdown_data(cls, rotation_id: int, cached_crop_records=None) -> list:
         """
         Builds a comprehensive breakdown of chemical allocation per crop / variety and phenological stage,
         enabling agronomists to quickly see how much chemical is assigned to each crop/variety (e.g. VERONICA, HYPERICUM).
@@ -248,9 +251,14 @@ class RequisitionService:
         rotation = Rotation.query.get_or_404(rotation_id)
         breakdown_dict = {}
         
+        # Batch load products to avoid N+1 queries
+        all_prods = Product.query.all()
+        products_by_id = {p.id: p for p in all_prods}
+        products_by_code = {p.code: p for p in all_prods}
+
         # 1. From rotation rounds
         for r in rotation.rounds:
-            calc = CalculationEngine.calculate_round(r)
+            calc = CalculationEngine.calculate_round(r, cached_crop_records=cached_crop_records)
             for seg in calc.get('segments', []):
                 c_name = (seg.get('crop_name') or 'SIN CULTIVO').strip().upper()
                 stage = (seg.get('phenological_stage') or 'VEGETATIVO').strip().upper()
@@ -292,7 +300,7 @@ class RequisitionService:
                 continue
             key = (c_name, stage, p_code)
             if key not in breakdown_dict:
-                prod = Product.query.get(a.product_id) if a.product_id else Product.query.filter_by(code=p_code).first()
+                prod = products_by_id.get(a.product_id) if a.product_id else products_by_code.get(p_code)
                 comm_name = prod.commercial_name if prod else p_code
                 unit = prod.unit if prod else (a.dose_unit or 'CC')
                 breakdown_dict[key] = {

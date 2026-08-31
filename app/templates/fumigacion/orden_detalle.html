@@ -202,16 +202,23 @@ tr {
         {% endif %}
     </div>
     <div class="d-flex align-items-center gap-2 flex-wrap">
-        <!-- Cultivo / Grupo Filter Selector -->
+        <!-- Cultivo Filter Selector -->
         <div class="d-flex align-items-center gap-1 bg-white p-1 border rounded shadow-sm">
             <label for="select-print-category" class="small fw-bold text-muted text-nowrap px-1">
-                <i class="fa-solid fa-seedling text-success me-1"></i> Cultivo / Grupo:
+                <i class="fa-solid fa-seedling text-success me-1"></i> Cultivo:
             </label>
-            <select id="select-print-category" class="form-select form-select-sm fw-bold border-success" style="min-width: 220px;">
-                <option value="ALL">📋 Todos los Cultivos (Completo)</option>
-                <option value="GYPSOPHILA">🌸 Solo GYPSOPHILA</option>
-                <option value="PRODUCTOS_NUEVOS">🌿 Solo PRODUCTOS NUEVOS (Variedades)</option>
-                <option value="PIV">🌱 Solo PIV (Propagación / Invernadero)</option>
+            <select id="select-print-category" class="form-select form-select-sm fw-bold border-success" style="min-width: 200px;">
+                <option value="ALL">📋 Todos los Cultivos</option>
+                {% set distinct_crops = [] %}
+                {% for d in order.details %}
+                    {% set c_name = (d.crop_name or '')|trim|upper %}
+                    {% if c_name and c_name not in distinct_crops %}
+                        {% set _ = distinct_crops.append(c_name) %}
+                    {% endif %}
+                {% endfor %}
+                {% for c in distinct_crops %}
+                <option value="{{ c }}">{{ c }}</option>
+                {% endfor %}
             </select>
         </div>
 
@@ -234,19 +241,17 @@ tr {
             </select>
         </div>
 
-        <!-- Quick Print Buttons -->
+        <!-- Quick Print Buttons (Dynamically generated for each crop in order) -->
         <div class="btn-group btn-group-sm shadow-sm" role="group">
-            <button type="button" class="btn btn-outline-primary fw-bold" onclick="setCategoryAndPrint('GYPSOPHILA');" title="Imprimir solo Gypsophila">
-                🌸 Gypsophila
+            {% if distinct_crops|length > 1 %}
+            {% for c in distinct_crops %}
+            <button type="button" class="btn btn-outline-primary fw-bold" onclick="setCategoryAndPrint('{{ c }}');" title="Imprimir solo {{ c }}">
+                {{ c }}
             </button>
-            <button type="button" class="btn btn-outline-success fw-bold" onclick="setCategoryAndPrint('PRODUCTOS_NUEVOS');" title="Imprimir Solidago, Verónica, Hypericum, etc.">
-                🌿 Prod. Nuevos
-            </button>
-            <button type="button" class="btn btn-outline-info fw-bold" onclick="setCategoryAndPrint('PIV');" title="Imprimir PIV">
-                🌱 PIV
-            </button>
+            {% endfor %}
+            {% endif %}
             <button type="button" class="btn btn-dark fw-bold" onclick="executePrintOrder({{ order.id }});" title="Imprimir con los filtros activos">
-                <i class="fa-solid fa-print text-warning me-1"></i> Imprimir
+                <i class="fa-solid fa-print text-warning me-1"></i> Imprimir Hoja
             </button>
         </div>
 
@@ -349,31 +354,32 @@ tr {
         </div>
     </div>
 
-    <!-- Exact 21-Column Table with Single Block Header Box and Zone Subtotals -->
+    <!-- Exact 22-Column Table with Single Block Header Box and Zone Subtotals -->
     <div class="table-responsive mb-2">
         <table class="table table-sm table-order align-middle mb-0" id="table-main-order">
             <thead>
                 <tr class="order-header-row bg-dark text-white">
-                    <th style="width: 32px;">VTA</th>
-                    <th style="width: 38px;">DÍA</th>
-                    <th style="width: 42px;">FECHA</th>
-                    <th style="width: 50px;">ZONA</th>
-                    <th style="width: 55px;">BLOQUE</th>
+                    <th style="width: 30px;">VTA</th>
+                    <th style="width: 35px;">DÍA</th>
+                    <th style="width: 40px;">FECHA</th>
+                    <th style="width: 48px;">ZONA</th>
+                    <th style="width: 52px;">BLOQUE</th>
                     <th style="width: 70px;">VARIEDAD</th>
-                    <th style="width: 36px;">EDAD</th>
-                    <th style="width: 48px;">CAMAS</th>
+                    <th style="width: 35px;">EDAD</th>
+                    <th style="width: 46px;">CAMAS</th>
                     <th style="width: 70px;">UBICACIÓN</th>
-                    <th style="width: 54px;">LITROS</th>
-                    <th style="width: 42px;">L/CAM</th>
-                    <th style="width: 65px;">LANZA</th>
-                    <th style="width: 80px;">PRODUCTO</th>
+                    <th style="width: 75px;">PRODUCTO</th>
                     <th style="width: 28px;">UM</th>
-                    <th style="width: 36px;">DOSIS</th>
-                    <th style="width: 52px;">TOTAL</th>
-                    <th style="width: 75px;">PLAGA</th>
-                    <th style="width: 75px;">I. ACTIVO</th>
+                    <th style="width: 35px;">DOSIS</th>
+                    <th style="width: 50px;">TOTAL</th>
+                    <th style="width: 52px;">LITROS</th>
+                    <th style="width: 40px;">L/CAM</th>
+                    <th style="width: 55px;">LANZA</th>
+                    <th style="width: 70px;">PLAGA</th>
+                    <th style="width: 70px;">I. ACTIVO</th>
                     <th style="width: 28px;">CT</th>
-                    <th style="width: 48px;">COLOR</th>
+                    <th style="width: 32px;">PH</th>
+                    <th style="width: 65px;">ÁREA</th>
                     <th style="width: 85px;">OPERARIO</th>
                 </tr>
             </thead>
@@ -384,8 +390,7 @@ tr {
                 {% set num_rows = b_info.rows|length %}
                 <tbody class="block-group" data-zone="{{ z_info.zone_name }}" data-block="{{ b_info.block_name }}">
                     {% for d in b_info.rows %}
-                    {% set cinfo = d.toxicological_color %}
-                    <tr class="order-detail-row" data-zone="{{ z_info.zone_name }}" data-operator="{{ d.operator }}" data-crop="{{ d.crop_name }}" data-crop-category="{{ d.crop_name|crop_category }}" data-std-beds="{{ d.standard_beds }}" data-liters="{{ d.total_liters }}" data-prod-code="{{ d.product_code }}" data-prod-name="{{ d.commercial_name or d.product_code }}" data-prod-amt="{{ d.product_amount }}" data-unit="{{ d.unit }}" data-is-first-in-block="{{ '1' if loop.first else '0' }}">
+                    <tr class="order-detail-row" data-zone="{{ z_info.zone_name }}" data-operator="{{ d.operator }}" data-crop="{{ d.crop_name }}" data-std-beds="{{ d.standard_beds }}" data-liters="{{ d.total_liters }}" data-prod-code="{{ d.product_code }}" data-prod-name="{{ d.commercial_name or d.product_code }}" data-prod-amt="{{ d.product_amount }}" data-unit="{{ d.unit }}" data-is-first-in-block="{{ '1' if loop.first else '0' }}">
                         
                         {% if loop.first %}
                         <!-- Single Visual Box for Block Metadata (rowspan across all products in block) -->
@@ -398,11 +403,6 @@ tr {
                         <td rowspan="{{ num_rows }}" class="text-center fw-bold align-middle">{{ d.real_age|format_age }}</td>
                         <td rowspan="{{ num_rows }}" class="text-end fw-bold fs-6 text-dark align-middle">{{ d.standard_beds|format_number(2) }}</td>
                         <td rowspan="{{ num_rows }}" class="text-center font-monospace small fw-bold align-middle">{{ d.bed_range }}</td>
-                        <td rowspan="{{ num_rows }}" class="text-end fw-bold fs-6 text-success align-middle">{{ d.total_liters|format_number(1) }}</td>
-                        <td rowspan="{{ num_rows }}" class="text-end fw-semibold align-middle">{{ d.liters_per_bed|format_number(1) }}</td>
-                        <td rowspan="{{ num_rows }}" class="text-center small fw-semibold align-middle" style="background-color: #f8fafc;">
-                            <span class="badge bg-light text-dark border">{{ d.spray_lance or 'Lanza 2 Boquillas' }}</span>
-                        </td>
                         {% endif %}
 
                         <!-- Product Columns (1 row per product in mix) -->
@@ -410,22 +410,27 @@ tr {
                         <td class="text-center">{{ d.unit }}</td>
                         <td class="text-end">{{ d.dose }}</td>
                         <td class="text-end fw-bold text-dark">{{ d.product_amount|format_product(d.unit) }}</td>
+
+                        {% if loop.first %}
+                        <!-- Liters and Lance Columns (rowspan across all products in block) -->
+                        <td rowspan="{{ num_rows }}" class="text-end fw-bold fs-6 text-success align-middle">{{ d.total_liters|format_number(1) }}</td>
+                        <td rowspan="{{ num_rows }}" class="text-end fw-semibold align-middle">{{ d.liters_per_bed|format_number(1) }}</td>
+                        <td rowspan="{{ num_rows }}" class="text-center align-middle p-1" style="background-color: #f8fafc; max-width: 60px; min-width: 50px;">
+                            <div class="small fw-semibold text-dark" style="font-size: 0.62rem; word-break: break-word; line-height: 1.15;">
+                                {% if d.spray_lance %}
+                                    {{ d.spray_lance|replace(' (', '<br>(')|safe }}
+                                {% else %}
+                                    Lanza de 3 salidas<br><span class="text-muted small">(C35)</span>
+                                {% endif %}
+                            </div>
+                        </td>
+                        {% endif %}
+
                         <td class="small text-truncate" style="max-width: 80px;" title="{{ d.pest or '-' }}">{{ d.pest or '-' }}</td>
                         <td class="small text-muted text-truncate" style="max-width: 80px;" title="{{ d.active_ingredient or '-' }}">{{ d.active_ingredient or '-' }}</td>
                         <td class="text-center fw-bold">{{ d.toxicological_category or '-' }}</td>
-                        <td class="text-center">
-                            {% if cinfo == 'ROJO' %}
-                            <div class="ct-box-I">ROJO</div>
-                            {% elif cinfo == 'AMARILLO' %}
-                            <div class="ct-box-II">AMAR</div>
-                            {% elif cinfo == 'AZUL' %}
-                            <div class="ct-box-III">AZUL</div>
-                            {% elif cinfo == 'VERDE' %}
-                            <div class="ct-box-IV">VERD</div>
-                            {% else %}
-                            <div class="ct-box-empty">-</div>
-                            {% endif %}
-                        </td>
+                        <td class="text-center font-monospace small fw-bold text-muted">5.5</td>
+                        <td class="small fw-semibold text-truncate" style="max-width: 75px;" title="{{ d.crop_name }}">{{ d.crop_name }}</td>
 
                         {% if loop.first %}
                         <!-- Operator Box (rowspan across all products in block) -->
@@ -445,10 +450,10 @@ tr {
                             <i class="fa-solid fa-layer-group text-primary me-1"></i> SUBTOTAL {{ z_info.zone_name }}:
                         </td>
                         <td class="text-end fw-bold text-primary cell-zone-beds">{{ z_info.total_beds|format_number(2) }}</td>
-                        <td class="text-center"></td>
+                        <td colspan="5"></td>
                         <td class="text-end fw-bold text-success cell-zone-liters">{{ z_info.total_liters|format_number(1) }} L</td>
                         <td colspan="2"></td>
-                        <td colspan="8" class="small bg-white p-1 cell-zone-products-container">
+                        <td colspan="6" class="small bg-white p-1 cell-zone-products-container">
                             {% if z_info.liquid_products %}
                             <div class="mb-1 zone-liq-line">
                                 <span class="badge bg-primary-subtle text-primary border border-primary-subtle me-1"><i class="fa-solid fa-droplet me-1"></i>Líq:</span>
@@ -466,7 +471,6 @@ tr {
                             </div>
                             {% endif %}
                         </td>
-                        <td></td>
                     </tr>
                 </tbody>
 
@@ -474,26 +478,27 @@ tr {
                 {% if not loop.last %}
                 <tbody class="zone-repeat-header-tbody">
                     <tr class="order-header-row bg-dark text-white">
-                        <th style="width: 32px;">VTA</th>
-                        <th style="width: 38px;">DÍA</th>
-                        <th style="width: 42px;">FECHA</th>
-                        <th style="width: 50px;">ZONA</th>
-                        <th style="width: 55px;">BLOQUE</th>
+                        <th style="width: 30px;">VTA</th>
+                        <th style="width: 35px;">DÍA</th>
+                        <th style="width: 40px;">FECHA</th>
+                        <th style="width: 48px;">ZONA</th>
+                        <th style="width: 52px;">BLOQUE</th>
                         <th style="width: 70px;">VARIEDAD</th>
-                        <th style="width: 36px;">EDAD</th>
-                        <th style="width: 48px;">CAMAS</th>
+                        <th style="width: 35px;">EDAD</th>
+                        <th style="width: 46px;">CAMAS</th>
                         <th style="width: 70px;">UBICACIÓN</th>
-                        <th style="width: 54px;">LITROS</th>
-                        <th style="width: 42px;">L/CAM</th>
-                        <th style="width: 65px;">LANZA</th>
-                        <th style="width: 80px;">PRODUCTO</th>
+                        <th style="width: 75px;">PRODUCTO</th>
                         <th style="width: 28px;">UM</th>
-                        <th style="width: 36px;">DOSIS</th>
-                        <th style="width: 52px;">TOTAL</th>
-                        <th style="width: 75px;">PLAGA</th>
-                        <th style="width: 75px;">I. ACTIVO</th>
+                        <th style="width: 35px;">DOSIS</th>
+                        <th style="width: 50px;">TOTAL</th>
+                        <th style="width: 52px;">LITROS</th>
+                        <th style="width: 40px;">L/CAM</th>
+                        <th style="width: 55px;">LANZA</th>
+                        <th style="width: 70px;">PLAGA</th>
+                        <th style="width: 70px;">I. ACTIVO</th>
                         <th style="width: 28px;">CT</th>
-                        <th style="width: 48px;">COLOR</th>
+                        <th style="width: 32px;">PH</th>
+                        <th style="width: 65px;">ÁREA</th>
                         <th style="width: 85px;">OPERARIO</th>
                     </tr>
                 </tbody>
@@ -504,9 +509,9 @@ tr {
                 <tr>
                     <td colspan="7" class="text-end">TOTAL GENERAL:</td>
                     <td class="text-end" id="tfoot-total-beds">{{ order.total_standard_beds|format_number(2) }}</td>
-                    <td class="text-center"></td>
+                    <td colspan="5"></td>
                     <td class="text-end" id="tfoot-total-liters">{{ order.total_liters|format_number(1) }} L</td>
-                    <td colspan="11"></td>
+                    <td colspan="8"></td>
                 </tr>
             </tfoot>
         </table>
@@ -643,7 +648,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             rows.forEach(r => {
                 const rowOp = (r.getAttribute('data-operator') || '').trim();
-                const rowCat = (r.getAttribute('data-crop-category') || 'PRODUCTOS_NUEVOS').trim().toUpperCase();
+                const rowCrop = (r.getAttribute('data-crop') || '').trim().toUpperCase();
                 const beds = parseFloat(r.getAttribute('data-std-beds') || '0');
                 const liters = parseFloat(r.getAttribute('data-liters') || '0');
                 const prodCode = (r.getAttribute('data-prod-code') || '').trim();
@@ -652,7 +657,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const isFirstInBlock = r.getAttribute('data-is-first-in-block') === '1';
 
                 const matchOp = (selectedOp === 'ALL' || rowOp === selectedOp);
-                const matchCat = (selectedCat === 'ALL' || rowCat === selectedCat);
+                const matchCat = (selectedCat === 'ALL' || rowCrop === selectedCat || rowCrop.includes(selectedCat));
 
                 if (matchOp && matchCat) {
                     r.style.display = '';
@@ -755,12 +760,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Update Header & Signature
         let titleParts = [];
-        if (selectedCat === 'GYPSOPHILA') {
-            titleParts.push('ORDEN OFICIAL DE FUMIGACIÓN - GYPSOPHILA');
-        } else if (selectedCat === 'PRODUCTOS_NUEVOS') {
-            titleParts.push('ORDEN OFICIAL DE FUMIGACIÓN - PRODUCTOS NUEVOS (VARIEDADES)');
-        } else if (selectedCat === 'PIV') {
-            titleParts.push('ORDEN OFICIAL DE FUMIGACIÓN - PIV');
+        if (selectedCat !== 'ALL') {
+            titleParts.push(`ORDEN OFICIAL DE FUMIGACIÓN - ${selectedCat}`);
         } else {
             titleParts.push('ORDEN OFICIAL DE FUMIGACIÓN');
         }

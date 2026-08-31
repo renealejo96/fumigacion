@@ -105,7 +105,7 @@ class OrderService:
                     product_amount=0.0,
                     total_liters=seg['total_liters'],
                     liters_per_bed=seg['liters_per_bed'],
-                    spray_lance=seg.get('spray_lance', 'Lanza 2 Boquillas') or 'Lanza 2 Boquillas',
+                    spray_lance=seg.get('spray_lance', 'Lanza de 3 salidas (C35)') or 'Lanza de 3 salidas (C35)',
                     pest='',
                     active_ingredient='',
                     toxicological_category='',
@@ -140,7 +140,7 @@ class OrderService:
                         product_amount=round_product_amount(p_it['product_amount'], p_it['dose_unit']),
                         total_liters=seg['total_liters'],
                         liters_per_bed=seg['liters_per_bed'],
-                        spray_lance=seg.get('spray_lance', 'Lanza 2 Boquillas') or 'Lanza 2 Boquillas',
+                        spray_lance=seg.get('spray_lance', 'Lanza de 3 salidas (C35)') or 'Lanza de 3 salidas (C35)',
                         pest=p_it['pest'],
                         active_ingredient=p_it['active_ingredient'],
                         toxicological_category=p_it['toxicological_category'],
@@ -330,51 +330,80 @@ class OrderService:
         db.session.commit()
         return order
 
-    @staticmethod
-    def export_order_to_excel(order_obj) -> io.BytesIO:
+    @classmethod
+    def get_order_details_rows(cls, details_list) -> list:
         """
-        Exports the fumigation order to a clean, well-formatted Excel workbook (.xlsx)
-        repeating values row by row without gaps so the warehouse (almacén) can filter and weigh directly.
+        Builds the clean, unmerged flat database rows from a list of FumigationOrderDetail items.
+        Exact reflection of the fumigation program view, repeated row by row without gaps:
+        No 'SUFIJO', no 'ETAPA', no 'PRODUCTO' code column, keeping 'NOMBRE COMERCIAL'.
         """
+        sorted_details = sorted(details_list, key=lambda x: (x.round_number, x.id, x.order_in_mix))
         rows = []
-        for d in order_obj.details:
+        for d in sorted_details:
             is_int = is_integer_unit(d.unit)
-            amt = int(round(d.product_amount)) if is_int else round(d.product_amount, 2)
+            amt = int(round(d.product_amount)) if is_int else round(float(d.product_amount or 0.0), 2)
             
+            # Format age safely as numeric integer/float if possible
+            age_val = d.real_age
+            try:
+                if age_val is not None and str(age_val).strip():
+                    age_f = float(str(age_val).replace(',', '.'))
+                    age_val = int(age_f) if age_f.is_integer() else round(age_f, 1)
+            except (ValueError, TypeError):
+                pass
+
             rows.append({
                 'VTA': d.round_name,
                 'DÍA': d.scheduled_day,
                 'FECHA': d.scheduled_date.strftime('%Y-%m-%d') if d.scheduled_date else '',
                 'ZONA': d.zone or '',
                 'BLOQUE': d.block_name,
-                'SUFIJO': d.suffix,
                 'VARIEDAD': d.crop_name,
-                'EDAD': d.real_age,
-                'CAMAS': round(d.standard_beds, 2),
-                'UBICACION': d.bed_range,
-                'TOTAL LITROS': round(d.total_liters, 1),
-                'LT/CAMA': round(d.liters_per_bed, 1),
-                'TIPO LANZA': d.spray_lance or 'Lanza 2 Boquillas',
-                'PRODUCTO': d.product_code,
-                'NOMBRE COMERCIAL': d.commercial_name,
-                'UM': d.unit,
-                'DOSIS': d.dose,
+                'EDAD': age_val,
+                'CAMAS': round(float(d.standard_beds or 0.0), 2),
+                'UBICACIÓN': d.bed_range,
+                'NOMBRE COMERCIAL': d.commercial_name or d.product_code or '-',
+                'UM': d.unit or 'CC',
+                'DOSIS': float(d.dose or 0.0),
                 'TOTAL PRODUCTO': amt,
+                'TOTAL LITROS': round(float(d.total_liters or 0.0), 1),
+                'LITROS CAMA': round(float(d.liters_per_bed or 0.0), 1),
+                'LANZA': d.spray_lance or 'Lanza de 3 salidas (C35)',
                 'PLAGA': d.pest or '',
                 'INGREDIENTE ACTIVO': d.active_ingredient or '',
                 'CT': d.toxicological_category or '',
+                'PH': 5.5,
+                'ÁREA': d.crop_name,
                 'COLOR': d.toxicological_color or '',
-                'OPERARIO': d.operator
+                'OPERARIO': d.operator or ''
             })
+        return rows
 
+    @classmethod
+    def export_order_to_excel(cls, order_obj, sheet_title: str = None) -> io.BytesIO:
+        """
+        Exports the fumigation order (or list of orders) to a clean, well-formatted Excel workbook (.xlsx)
+        repeating values row by row without gaps so the warehouse (bodega) can build pivot tables (tablas dinámicas)
+        and reach the exact same totals per variety and chemical product.
+        """
+        if isinstance(order_obj, (list, tuple, set)):
+            details = [d for o in order_obj for d in o.details]
+            first_ord = next(iter(order_obj), None)
+            default_sheet = f"Programa_Sem_{first_ord.week}" if first_ord else "Programa_Fumigacion"
+        else:
+            details = order_obj.details
+            default_sheet = f"Orden_{order_obj.round_name}"
+
+        sheet_name = (sheet_title or default_sheet)[:31]
+        rows = cls.get_order_details_rows(details)
         df = pd.DataFrame(rows)
         
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df.to_excel(writer, sheet_name=f"Orden_{order_obj.round_name}", index=False)
+            df.to_excel(writer, sheet_name=sheet_name, index=False)
             
-            # Auto-adjust column widths in openpyxl
-            ws = writer.sheets[f"Orden_{order_obj.round_name}"]
+            ws = writer.sheets[sheet_name]
+            ws.freeze_panes = 'A2'
             for col in ws.columns:
                 max_len = max(len(str(cell.value or '')) for cell in col)
                 col_letter = col[0].column_letter

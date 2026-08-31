@@ -131,6 +131,33 @@ class TestBodegaModule(unittest.TestCase):
         db.session.delete(draft_rot)
         db.session.commit()
 
+    def test_excel_export_structure_and_columns(self):
+        import pandas as pd
+        order = FumigationOrder.query.first()
+        if order and order.details:
+            stream = OrderService.export_order_to_excel(order)
+            self.assertIsNotNone(stream)
+            df = pd.read_excel(stream)
+
+            # Columns that MUST NOT exist
+            self.assertNotIn('SUFIJO', df.columns, "SUFIJO column must be removed")
+            self.assertNotIn('ETAPA', df.columns, "ETAPA column must be removed")
+            self.assertNotIn('PRODUCTO', df.columns, "PRODUCTO code column must be removed")
+
+            # Column that MUST exist
+            self.assertIn('NOMBRE COMERCIAL', df.columns, "NOMBRE COMERCIAL column must be present")
+            self.assertIn('VARIEDAD', df.columns)
+            self.assertIn('TOTAL PRODUCTO', df.columns)
+            self.assertIn('CAMAS', df.columns)
+            self.assertIn('TOTAL LITROS', df.columns)
+            self.assertIn('VTA', df.columns)
+            self.assertIn('DÍA', df.columns)
+            self.assertIn('BLOQUE', df.columns)
+            self.assertIn('OPERARIO', df.columns)
+
+            # Check rows repeat faithfully
+            self.assertEqual(len(df), len(order.details))
+
 if __name__ == '__main__':
     unittest.main()
 

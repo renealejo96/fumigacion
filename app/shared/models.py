@@ -454,7 +454,7 @@ class FumigationOrderDetail(db.Model):
     product_amount = db.Column(db.Float, default=0.0, nullable=False)
     total_liters = db.Column(db.Float, default=0.0, nullable=False)
     liters_per_bed = db.Column(db.Float, default=0.0, nullable=False)
-    spray_lance = db.Column(db.String(100), default='Lanza 2 Boquillas', nullable=True)  # Tipo de Lanza / Boquilla
+    spray_lance = db.Column(db.String(100), default='Lanza de 3 salidas (C35)', nullable=True)  # Tipo de Lanza / Boquilla
     pest = db.Column(db.Text, nullable=True)
     active_ingredient = db.Column(db.Text, nullable=True)
     toxicological_category = db.Column(db.String(100), nullable=True)
@@ -539,7 +539,7 @@ class AdditionalApplication(db.Model):
     standard_beds = db.Column(db.Float, default=1.0, nullable=False)
     liters_per_bed = db.Column(db.Float, default=0.0, nullable=False)
     total_liters = db.Column(db.Float, default=0.0, nullable=False)
-    spray_lance = db.Column(db.String(100), default='Lanza 2 Boquillas', nullable=True)
+    spray_lance = db.Column(db.String(100), default='Lanza de 3 salidas (C35)', nullable=True)
     product_id = db.Column(db.Integer, db.ForeignKey('products.id', ondelete='SET NULL'), nullable=True)
     product_code = db.Column(db.String(100), nullable=False)
     dose_applied = db.Column(db.Float, default=0.0, nullable=False)
@@ -566,7 +566,7 @@ class AdditionalApplication(db.Model):
             'standard_beds': round(self.standard_beds, 2),
             'liters_per_bed': round(self.liters_per_bed, 2),
             'total_liters': round(self.total_liters, 2),
-            'spray_lance': self.spray_lance or 'Lanza 2 Boquillas',
+            'spray_lance': self.spray_lance or 'Lanza de 3 salidas (C35)',
             'product_code': self.product_code,
             'dose_applied': self.dose_applied,
             'dose_unit': self.dose_unit,

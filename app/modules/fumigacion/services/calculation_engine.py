@@ -1,23 +1,28 @@
 import math
 import json
+import re
+import unicodedata
+from functools import lru_cache
 from app.extensions import db
 from app.shared.models import Crop, Product, Litraje, CropStateRecord, AdditionalApplication
 from app.shared.utils import (
     get_operator_for_zone, get_toxicological_color_info, 
-    is_integer_unit, round_product_amount,
+    is_integer_unit, round_product_amount, round_to_tank_step,
     safe_float, safe_int
 )
+
+_NON_ALPHANUM_REGEX = re.compile(r'[^a-zA-Z0-9]+')
 
 class CalculationEngine:
 
     @staticmethod
+    @lru_cache(maxsize=4096)
     def normalize_crop_name(crop_name: str) -> str:
         if not crop_name:
             return ""
-        import unicodedata, re
         n = str(crop_name).strip()
         n = unicodedata.normalize('NFKD', n).encode('ASCII', 'ignore').decode('utf-8')
-        n = re.sub(r'[^a-zA-Z0-9]+', '_', n).strip('_').upper()
+        n = _NON_ALPHANUM_REGEX.sub('_', n).strip('_').upper()
         return n
 
     _crops_cache = None
@@ -71,6 +76,7 @@ class CalculationEngine:
         """
         Filters CropStateRecords that belong to the specified crop_obj.
         Excludes VACIO, unclassified or discarded beds.
+        Optimized with in-memory property caching to avoid redundant string normalizations.
         """
         if not crop_obj:
             return []
@@ -106,9 +112,15 @@ class CalculationEngine:
             if not r.crop_master or r.crop_master.upper() in ('VACIO', 'DESCARTE', 'TUMBAR', 'NAN', 'TOTAL', 'TOTAL_GENERAL'):
                 continue
 
-            r_crop_master = cls.normalize_crop_name(r.crop_master)
-            r_product = cls.normalize_crop_name(r.product_name or '')
-            r_variety = cls.normalize_crop_name(r.variety or '')
+            r_crop_master = getattr(r, '_norm_crop_master', None)
+            if r_crop_master is None:
+                r_crop_master = cls.normalize_crop_name(r.crop_master)
+                r._norm_crop_master = r_crop_master
+                r._norm_product = cls.normalize_crop_name(r.product_name or '')
+                r._norm_variety = cls.normalize_crop_name(r.variety or '')
+
+            r_product = r._norm_product
+            r_variety = r._norm_variety
 
             is_match = False
             for term in search_terms:
@@ -204,6 +216,15 @@ class CalculationEngine:
         return f"Camas {', '.join(ranges)}"
 
     @classmethod
+    def get_default_spray_lance(cls, crop_name: str) -> str:
+        c = str(crop_name or '').upper()
+        if 'SOLIDAGO' in c:
+            return 'Aguilón Solidago'
+        elif 'VERONICA' in c:
+            return 'Lanza Veronica'
+        return 'Lanza de 3 salidas (C35)'
+
+    @classmethod
     def calculate_round(cls, round_obj, custom_review_segments=None, cached_crop_records=None):
         """
         Calculates application segments, product quantities, assigned operators and toxicological info for a round.
@@ -223,6 +244,16 @@ class CalculationEngine:
 
         # If custom reviewed segments are provided (from agronomist review tab)
         if custom_review_segments is not None and len(custom_review_segments) > 0:
+            # Pre-index round items by crop & stage to sync recipe/doses dynamically
+            mixes_by_crop_stage = {}
+            for it_idx, item in enumerate(sorted(round_obj.items, key=lambda x: getattr(x, 'order_index', 0))):
+                c_key = cls.normalize_crop_name(item.crop_name)
+                s_key = (item.phenological_stage or '').strip().upper()
+                mix_k = (c_key, s_key)
+                if mix_k not in mixes_by_crop_stage:
+                    mixes_by_crop_stage[mix_k] = []
+                mixes_by_crop_stage[mix_k].append((it_idx, item))
+
             # Calculate from custom reviewed segments
             total_liters_all = 0.0
             total_std_beds_all = 0.0
@@ -252,13 +283,56 @@ class CalculationEngine:
                 bed_count = max(1, bed_end - bed_start + 1)
                 standard_beds = round(safe_float(seg.get('standard_beds'), default=1.0), 2)
                 liters_per_bed = round(safe_float(seg.get('liters_per_bed'), default=0.0), 1)
-                segment_liters = round(standard_beds * liters_per_bed, 1)
+                raw_liters = standard_beds * liters_per_bed
+                segment_liters = round_to_tank_step(raw_liters, step=20)
                 zone = (seg.get('zone') or '').strip()
                 operator = seg.get('operator') or get_operator_for_zone(zone)
                 bed_range_str = seg.get('bed_range', f"Camas {bed_start}-{bed_end}")
 
-                # Retrieve products assigned to this segment
+                # Retrieve products assigned to this segment (sync with round recipe if not a manually customized block mix)
+                is_custom_mix = bool(seg.get('is_custom_mix', False))
                 products_list = seg.get('products', [])
+
+                if not is_custom_mix or not products_list:
+                    c_norm = cls.normalize_crop_name(crop_name)
+                    s_norm = stage.upper()
+                    round_items_matching = mixes_by_crop_stage.get((c_norm, s_norm))
+                    if not round_items_matching:
+                        # Dynamic partial match by crop
+                        for (ck, sk), items_list in mixes_by_crop_stage.items():
+                            if ck == c_norm or ck in c_norm or c_norm in ck:
+                                if sk == s_norm or not sk:
+                                    round_items_matching = items_list
+                                    break
+                    if not round_items_matching and mixes_by_crop_stage:
+                        # Fallback to first available mix if crop matches
+                        for (ck, sk), items_list in mixes_by_crop_stage.items():
+                            if ck == c_norm:
+                                round_items_matching = items_list
+                                break
+
+                    if round_items_matching:
+                        products_list = []
+                        for it_idx, it in round_items_matching:
+                            prod = it.product
+                            dose = it.dose_applied or 0.0
+                            dose_unit = it.dose_unit or (prod.unit if prod else 'CC')
+                            prod_code = prod.code if prod else 'N/A'
+                            comm_name = prod.commercial_name if (prod and prod.commercial_name) else prod_code
+                            pest = prod.pest if prod else ''
+                            ia = prod.active_ingredient if prod else ''
+                            ct = prod.toxicological_category if prod else ''
+                            products_list.append({
+                                'product_id': prod.id if prod else None,
+                                'product_code': prod_code,
+                                'commercial_name': comm_name,
+                                'dose': dose,
+                                'dose_unit': dose_unit,
+                                'pest': pest,
+                                'active_ingredient': ia,
+                                'toxicological_category': ct
+                            })
+
                 products_detail = []
                 products_summary_text_parts = []
 
@@ -328,7 +402,7 @@ class CalculationEngine:
                     'standard_beds': standard_beds,
                     'liters_per_bed': liters_per_bed,
                     'total_liters': segment_liters,
-                    'spray_lance': seg.get('spray_lance', 'Lanza 2 Boquillas') or 'Lanza 2 Boquillas',
+                    'spray_lance': seg.get('spray_lance') or cls.get_default_spray_lance(crop_name),
                     'products': products_list,
                     'products_detail': products_detail,
                     'products_summary_text': ", ".join(products_summary_text_parts),
@@ -341,23 +415,7 @@ class CalculationEngine:
                 total_std_beds_all += standard_beds
                 total_beds_count += bed_count
 
-            # Sort segments sequentially: ZONA -> BLOQUE (natural) -> SUFIJO -> CAMA INICIO -> CAMA FIN
-            import re
-            def get_seg_sort_key(s):
-                b_name = str(s.get('block_name') or '')
-                digits = re.findall(r'\d+', b_name)
-                b_num = int(digits[0]) if digits else 99999
-                return (
-                    str(s.get('zone') or ''),
-                    b_num,
-                    b_name,
-                    str(s.get('suffix') or 'A'),
-                    safe_int(s.get('bed_start'), default=0),
-                    safe_int(s.get('bed_end'), default=0)
-                )
-
-            segments.sort(key=get_seg_sort_key)
-
+            # Preserve user-defined order from custom_review_segments (e.g. custom Drag & Drop sequence)
             product_summaries = list(product_summary_map.values())
             for ps in product_summaries:
                 ps['total_required_quantity'] = round_product_amount(ps['total_required_quantity'], ps.get('dose_unit', 'CC'))
@@ -443,12 +501,14 @@ class CalculationEngine:
 
             segment_groups = {}
             for r in stage_records:
-                seg_key = (r.block_full.strip(), r.suffix.strip(), r.real_age, (r.zone or '').strip())
+                # Group by block_full, real_age, zone so sub-varieties of same crop/age (e.g. Billion vs G49)
+                # are consolidated into a single block segment as requested.
+                seg_key = (r.block_full.strip(), r.real_age, (r.zone or '').strip())
                 if seg_key not in segment_groups:
                     segment_groups[seg_key] = []
                 segment_groups[seg_key].append(r)
 
-            for (block_full, suffix, real_age, zone), recs in segment_groups.items():
+            for (block_full, real_age, zone), recs in segment_groups.items():
                 bed_nums = [r.bed_num for r in recs]
                 bed_min = min(bed_nums)
                 bed_max = max(bed_nums)
@@ -456,8 +516,13 @@ class CalculationEngine:
                 bed_count = len(recs)
                 total_std_beds = sum(r.standard_bed for r in recs)
 
+                # Determine primary suffix (prefer 'A' or dominant suffix)
+                suffixes = [r.suffix.strip() for r in recs if r.suffix]
+                suffix = suffixes[0] if suffixes else 'A'
+
                 liters_per_bed, lit_found = cls.get_liters_per_bed(crop_name, real_age)
-                segment_liters = round(total_std_beds * liters_per_bed, 1)
+                raw_liters = total_std_beds * liters_per_bed
+                segment_liters = round_to_tank_step(raw_liters, step=20)
 
                 operator = get_operator_for_zone(zone)
                 products_detail = []
@@ -506,8 +571,11 @@ class CalculationEngine:
                         }
                     product_summary_map[summary_key]['total_required_quantity'] += product_amount
 
-                varieties = list(set([r.variety for r in recs if r.variety]))
-                variety_str = ", ".join(varieties) if varieties else crop_name
+                if crop_name.upper() in ('GYPSOPHILA', 'GYPSO'):
+                    variety_str = 'Gypsophila'
+                else:
+                    varieties = list(set([r.variety for r in recs if r.variety]))
+                    variety_str = varieties[0] if len(varieties) == 1 else crop_name
 
                 segment_data = {
                     'round_number': round_obj.round_number,
@@ -529,6 +597,7 @@ class CalculationEngine:
                     'standard_beds': round(total_std_beds, 2),
                     'liters_per_bed': round(liters_per_bed, 1),
                     'total_liters': segment_liters,
+                    'spray_lance': cls.get_default_spray_lance(crop_name),
                     'products': [
                         {
                             'product_id': p['product_id'],

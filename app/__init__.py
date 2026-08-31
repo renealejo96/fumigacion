@@ -68,40 +68,62 @@ def create_app(config_class=Config):
         from app.shared.utils import get_crop_category
         return get_crop_category(crop_name)
 
-    # Safe dynamic column migrations
+    # Safe dynamic column migrations for SQLite and PostgreSQL
     with app.app_context():
-        from sqlalchemy import text
-        migrations = [
-            "ALTER TABLE crops ADD COLUMN IF NOT EXISTS category VARCHAR(50) DEFAULT 'PRODUCTOS_NUEVOS'",
-            "ALTER TABLE fumigation_order_details ALTER COLUMN bed_range TYPE TEXT",
-            "ALTER TABLE fumigation_order_details ALTER COLUMN real_age TYPE VARCHAR(255)",
-            "ALTER TABLE fumigation_order_details ALTER COLUMN crop_name TYPE VARCHAR(255)",
-            "ALTER TABLE fumigation_order_details ALTER COLUMN variety_specific TYPE VARCHAR(255)",
-            "ALTER TABLE fumigation_order_details ALTER COLUMN product_code TYPE VARCHAR(255)",
-            "ALTER TABLE fumigation_order_details ALTER COLUMN commercial_name TYPE VARCHAR(255)",
-            "ALTER TABLE fumigation_order_details ALTER COLUMN operator TYPE VARCHAR(255)",
-            "ALTER TABLE fumigation_order_details ALTER COLUMN zone TYPE VARCHAR(255)",
-            "ALTER TABLE fumigation_order_details ALTER COLUMN block_name TYPE VARCHAR(100)",
-            "ALTER TABLE fumigation_order_details ALTER COLUMN suffix TYPE VARCHAR(50)",
-            "ALTER TABLE fumigation_order_details ALTER COLUMN phenological_stage TYPE VARCHAR(100)",
-            "ALTER TABLE fumigation_order_details ALTER COLUMN pest TYPE TEXT",
-            "ALTER TABLE fumigation_order_details ALTER COLUMN active_ingredient TYPE TEXT",
-            "ALTER TABLE fumigation_order_product_summaries ALTER COLUMN product_code TYPE VARCHAR(255)",
-            "ALTER TABLE fumigation_order_product_summaries ALTER COLUMN commercial_name TYPE VARCHAR(255)",
-            "ALTER TABLE fumigation_order_product_summaries ALTER COLUMN pest TYPE TEXT",
-            "ALTER TABLE requisitions_items ALTER COLUMN pest TYPE TEXT",
-            "ALTER TABLE requisitions_items ALTER COLUMN product_code TYPE VARCHAR(255)",
-            "ALTER TABLE additional_applications ALTER COLUMN reason TYPE TEXT",
-            "ALTER TABLE additional_applications ALTER COLUMN notes TYPE TEXT",
-            "ALTER TABLE fumigation_order_details ADD COLUMN IF NOT EXISTS spray_lance VARCHAR(100) DEFAULT 'Lanza 2 Boquillas'",
-            "ALTER TABLE additional_applications ADD COLUMN IF NOT EXISTS spray_lance VARCHAR(100) DEFAULT 'Lanza 2 Boquillas'"
-        ]
-        for m in migrations:
-            try:
-                db.session.execute(text(m))
-                db.session.commit()
-            except Exception:
-                db.session.rollback()
+        from sqlalchemy import inspect, text
+        try:
+            inspector = inspect(db.engine)
+            existing_tables = inspector.get_table_names()
+            is_sqlite = 'sqlite' in str(app.config.get('SQLALCHEMY_DATABASE_URI', ''))
+
+            def ensure_column(table_name, column_name, col_type_sql, default_sql=None):
+                if table_name not in existing_tables:
+                    return
+                cols = [c['name'] for c in inspector.get_columns(table_name)]
+                if column_name not in cols:
+                    default_clause = f" DEFAULT {default_sql}" if default_sql is not None else ""
+                    sql = f"ALTER TABLE {table_name} ADD COLUMN {column_name} {col_type_sql}{default_clause}"
+                    try:
+                        db.session.execute(text(sql))
+                        db.session.commit()
+                    except Exception:
+                        db.session.rollback()
+
+            ensure_column('crops', 'category', 'VARCHAR(50)', "'PRODUCTOS_NUEVOS'")
+            ensure_column('fumigation_order_details', 'spray_lance', 'VARCHAR(100)', "'Lanza 2 Boquillas'")
+            ensure_column('additional_applications', 'spray_lance', 'VARCHAR(100)', "'Lanza 2 Boquillas'")
+
+            if not is_sqlite:
+                pg_migrations = [
+                    "ALTER TABLE fumigation_order_details ALTER COLUMN bed_range TYPE TEXT",
+                    "ALTER TABLE fumigation_order_details ALTER COLUMN real_age TYPE VARCHAR(255)",
+                    "ALTER TABLE fumigation_order_details ALTER COLUMN crop_name TYPE VARCHAR(255)",
+                    "ALTER TABLE fumigation_order_details ALTER COLUMN variety_specific TYPE VARCHAR(255)",
+                    "ALTER TABLE fumigation_order_details ALTER COLUMN product_code TYPE VARCHAR(255)",
+                    "ALTER TABLE fumigation_order_details ALTER COLUMN commercial_name TYPE VARCHAR(255)",
+                    "ALTER TABLE fumigation_order_details ALTER COLUMN operator TYPE VARCHAR(255)",
+                    "ALTER TABLE fumigation_order_details ALTER COLUMN zone TYPE VARCHAR(255)",
+                    "ALTER TABLE fumigation_order_details ALTER COLUMN block_name TYPE VARCHAR(100)",
+                    "ALTER TABLE fumigation_order_details ALTER COLUMN suffix TYPE VARCHAR(50)",
+                    "ALTER TABLE fumigation_order_details ALTER COLUMN phenological_stage TYPE VARCHAR(100)",
+                    "ALTER TABLE fumigation_order_details ALTER COLUMN pest TYPE TEXT",
+                    "ALTER TABLE fumigation_order_details ALTER COLUMN active_ingredient TYPE TEXT",
+                    "ALTER TABLE fumigation_order_product_summaries ALTER COLUMN product_code TYPE VARCHAR(255)",
+                    "ALTER TABLE fumigation_order_product_summaries ALTER COLUMN commercial_name TYPE VARCHAR(255)",
+                    "ALTER TABLE fumigation_order_product_summaries ALTER COLUMN pest TYPE TEXT",
+                    "ALTER TABLE requisition_items ALTER COLUMN pest TYPE TEXT",
+                    "ALTER TABLE requisition_items ALTER COLUMN product_code TYPE VARCHAR(255)",
+                    "ALTER TABLE additional_applications ALTER COLUMN reason TYPE TEXT",
+                    "ALTER TABLE additional_applications ALTER COLUMN notes TYPE TEXT"
+                ]
+                for m in pg_migrations:
+                    try:
+                        db.session.execute(text(m))
+                        db.session.commit()
+                    except Exception:
+                        db.session.rollback()
+        except Exception:
+            pass
 
     # Register blueprints
     from app.modules.auth.routes import auth_bp

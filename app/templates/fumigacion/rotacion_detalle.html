@@ -112,6 +112,86 @@
 .row-has-difference {
     border-left: 4px solid #f59e0b !important;
 }
+/* Subtle green tint for reviewed / adjusted rows */
+.row-modified {
+    background-color: #ecfdf5 !important;
+    border-left: 4px solid #10b981 !important;
+}
+.row-modified td {
+    background-color: #ecfdf5 !important;
+}
+/* Red alert for duplicate / divided block pieces */
+.row-duplicated {
+    background-color: #fee2e2 !important;
+    border-left: 4px solid #dc2626 !important;
+}
+.row-duplicated td {
+    background-color: #fee2e2 !important;
+}
+/* Drag & Drop Reordering Styles */
+.drag-handle-cell {
+    cursor: grab !important;
+    user-select: none;
+    touch-action: none;
+}
+.drag-handle-cell:active {
+    cursor: grabbing !important;
+}
+.cuadre-row.is-dragging {
+    opacity: 0.40 !important;
+    background-color: #dbeafe !important;
+    outline: 2px dashed #2563eb;
+}
+.cuadre-row.drag-over-top {
+    border-top: 3.5px solid #2563eb !important;
+}
+.cuadre-row.drag-over-bottom {
+    border-bottom: 3.5px solid #2563eb !important;
+}
+.cuadre-table {
+    font-size: 0.69rem !important;
+}
+.cuadre-table th {
+    padding: 3px 2px !important;
+    font-size: 0.67rem !important;
+    white-space: nowrap;
+}
+.cuadre-table td {
+    padding: 2px 2px !important;
+}
+.cuadre-table input.form-control {
+    font-size: 0.68rem !important;
+    padding: 0px 2px !important;
+    height: 20px !important;
+    background-color: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 3px;
+}
+.cuadre-table input.form-control:focus {
+    border-color: #10b981;
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.25);
+    background-color: #ffffff !important;
+}
+.cuadre-table select.form-select {
+    font-size: 0.65rem !important;
+    padding: 0 2px !important;
+    height: 20px !important;
+}
+.cuadre-table .btn {
+    padding: 0 3px !important;
+    height: 20px !important;
+    font-size: 0.65rem !important;
+    line-height: 18px;
+}
+.btn-crop-pill {
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+}
+.btn-crop-pill.active {
+    background-color: #0f172a !important;
+    color: #ffffff !important;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+}
 </style>
 {% endblock %}
 
@@ -336,35 +416,104 @@
     <!-- ==================== PASO 2: AJUSTE Y CUADRE DE CAMAS (ESCRITORIO DIGITAL DE COMPARACIÓN) ==================== -->
     <div class="tab-pane fade" id="content-paso2" role="tabpanel">
         
-        <!-- Header Workspace Control Bar -->
-        <div class="card mb-2 shadow-sm border bg-white">
-            <div class="card-body p-2">
-                <div class="row g-2 align-items-center">
-                    <!-- Week and Crop Variety Selection -->
-                    <div class="col-lg-4 col-md-5">
-                        <div class="d-flex align-items-center gap-1">
-                            <span class="badge bg-dark font-monospace fs-6 px-2 py-1">Sem {{ rotation.week }}</span>
-                            <div class="input-group input-group-sm">
-                                <button type="button" class="btn btn-outline-secondary px-2" id="btn-prev-variety" title="Variedad anterior">
-                                    <i class="fa-solid fa-chevron-left"></i>
-                                </button>
-                                <select id="filter-cuadre-crop" class="form-select form-select-sm fw-bold border-primary text-primary" style="min-width: 140px;">
-                                    {% for c_name in rotation_crops %}
-                                    <option value="{{ c_name }}">{{ c_name }}</option>
-                                    {% endfor %}
-                                    <option value="ALL">📋 Todas las Variedades</option>
-                                </select>
-                                <button type="button" class="btn btn-outline-secondary px-2" id="btn-next-variety" title="Siguiente variedad">
-                                    <i class="fa-solid fa-chevron-right"></i>
-                                </button>
-                            </div>
-                            <span class="badge bg-light text-muted border small text-nowrap" id="variety-progress-badge">1 de {{ rotation_crops|length }}</span>
-                        </div>
-                    </div>
+        <!-- 1. Resumen Superior de Cultivos Asignados con Rotación Programada -->
+        <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+            <div>
+                <h6 class="fw-bold text-dark mb-0"><i class="fa-solid fa-seedling text-success me-2"></i>Cultivos Asignados en esta Rotación (Semana {{ rotation.week }})</h6>
+                <div class="text-muted small">Haga clic en un cultivo para abrir su mesa de trabajo y calibrar sus camas por bloque.</div>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <span class="badge bg-light text-muted border font-monospace">{{ rotation_crops|length }} cultivo(s) con químicos</span>
+            </div>
+        </div>
 
-                    <!-- Quick Global Block Search & Comparison Filters -->
-                    <div class="col-lg-4 col-md-4">
-                        <div class="d-flex align-items-center gap-2">
+        <div class="row g-2 mb-3" id="crop-summary-deck">
+            {% for c_name in rotation_crops %}
+            <div class="col-md-4 col-sm-6">
+                <div class="card h-100 shadow-xs border crop-summary-card" data-crop="{{ c_name }}" style="cursor: pointer; transition: all 0.2s;">
+                    <div class="card-body p-2 d-flex flex-column justify-content-between">
+                        <div class="d-flex justify-content-between align-items-start mb-1">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="badge bg-dark fs-6 font-monospace"><i class="fa-solid fa-leaf text-success me-1"></i>{{ c_name }}</span>
+                            </div>
+                            <span class="badge bg-light text-muted border pill-crop-status" data-crop="{{ c_name }}">Censo</span>
+                        </div>
+                        <div class="row g-1 text-center font-monospace small my-1">
+                            <div class="col-4 bg-white rounded p-1 border">
+                                <div class="text-muted" style="font-size: 0.65rem;">BLOQUES</div>
+                                <strong class="text-dark card-crop-blocks" data-crop="{{ c_name }}">-</strong>
+                            </div>
+                            <div class="col-4 bg-white rounded p-1 border">
+                                <div class="text-muted" style="font-size: 0.65rem;">CAMAS STD</div>
+                                <strong class="text-primary card-crop-beds" data-crop="{{ c_name }}">-</strong>
+                            </div>
+                            <div class="col-4 bg-white rounded p-1 border">
+                                <div class="text-muted" style="font-size: 0.65rem;">LITROS EST.</div>
+                                <strong class="text-success card-crop-liters" data-crop="{{ c_name }}">-</strong>
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-outline-primary btn-sm py-1 fw-bold w-100 mt-1 btn-card-calibrate" data-crop="{{ c_name }}">
+                            <i class="fa-solid fa-sliders me-1"></i> Abrir Mesa de Calibración
+                        </button>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- 2. Placeholder cuando ningún cultivo ha sido seleccionado aún -->
+        <div id="no-crop-selected-placeholder" class="card border border-dashed text-center py-4 my-2 bg-light shadow-xs">
+            <div class="card-body py-4">
+                <i class="fa-solid fa-hand-pointer fa-2x text-primary mb-2"></i>
+                <h6 class="fw-bold text-dark mb-1">Seleccione un cultivo arriba para abrir su mesa de calibración</h6>
+                <p class="text-muted small mb-0">Haga clic en la tarjeta de cualquier cultivo asignado para visualizar y modificar sus camas en Vegetativo y Productivo.</p>
+            </div>
+        </div>
+
+        <!-- 3. Contenedor de Mesa de Trabajo (Se muestra al seleccionar un cultivo) -->
+        <div id="crop-workspace-container" style="display: none;">
+            
+            <!-- Header Workspace Control Bar -->
+            <div class="card mb-2 shadow-sm border bg-white">
+                <div class="card-body p-2">
+                    <div class="row g-2 align-items-center">
+                        <!-- Vuelta Selection & Crop Variety Selection -->
+                        <div class="col-lg-5 col-md-5">
+                            <div class="d-flex align-items-center gap-1 flex-wrap">
+                                {% if rounds_calculated|length > 1 %}
+                                <select id="filter-cuadre-round" class="form-select form-select-sm fw-bold border-success text-success" style="max-width: 170px;" title="Seleccionar Vuelta para calibrar">
+                                    {% for r_item in rounds_calculated %}
+                                    <option value="{{ r_item.round.id }}" {% if loop.first %}selected{% endif %}>
+                                        📅 {{ r_item.round.name }} ({{ r_item.round.scheduled_day[:3] if r_item.round.scheduled_day else '' }})
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                                {% else %}
+                                <span class="badge bg-dark font-monospace fs-6 px-2 py-1">Sem {{ rotation.week }}</span>
+                                {% endif %}
+
+                                <div class="input-group input-group-sm" style="max-width: 220px;">
+                                    <button type="button" class="btn btn-outline-secondary px-2" id="btn-prev-variety" title="Variedad anterior">
+                                        <i class="fa-solid fa-chevron-left"></i>
+                                    </button>
+                                    <select id="filter-cuadre-crop" class="form-select form-select-sm fw-bold border-primary text-primary">
+                                        {% for c_name in rotation_crops %}
+                                        <option value="{{ c_name }}" {% if loop.first %}selected{% endif %}>{{ c_name }}</option>
+                                        {% endfor %}
+                                        {% if rotation_crops|length > 1 %}
+                                        <option value="ALL">📋 Todos los Cultivos</option>
+                                        {% endif %}
+                                    </select>
+                                    <button type="button" class="btn btn-outline-secondary px-2" id="btn-next-variety" title="Siguiente variedad">
+                                        <i class="fa-solid fa-chevron-right"></i>
+                                    </button>
+                                </div>
+                                <span class="badge bg-light text-muted border small text-nowrap" id="variety-progress-badge">1 de {{ rotation_crops|length }}</span>
+                            </div>
+                        </div>
+
+                        <!-- Quick Global Block Search & Comparison Filters -->
+                        <div class="col-lg-3 col-md-3">
                             <div class="input-group input-group-sm">
                                 <span class="input-group-text bg-light text-secondary"><i class="fa-solid fa-magnifying-glass"></i></span>
                                 <input type="text" id="filter-cuadre-block-search" class="form-control form-control-sm fw-bold" placeholder="Buscar bloque (ej. BL 16)...">
@@ -373,162 +522,195 @@
                                 </button>
                             </div>
                         </div>
-                    </div>
 
-                    <!-- Action Buttons (Undo, Redo, Add Siembra, Draft, Assign) -->
-                    <div class="col-lg-4 col-md-3 text-end d-flex justify-content-end align-items-center gap-1 flex-wrap">
-                        <div class="btn-group btn-group-sm" role="group">
-                            <button type="button" class="btn btn-outline-secondary" id="btn-undo-action" title="Deshacer última acción" disabled>
-                                <i class="fa-solid fa-rotate-left"></i>
+                        <!-- Action Buttons (Undo, Redo, Fullscreen, Draft, Assign, Close) -->
+                        <div class="col-lg-5 col-md-4 text-end d-flex justify-content-end align-items-center gap-1 flex-wrap">
+                            <div class="btn-group btn-group-sm" role="group">
+                                <button type="button" class="btn btn-outline-secondary" id="btn-undo-action" title="Deshacer última acción" disabled>
+                                    <i class="fa-solid fa-rotate-left"></i>
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary" id="btn-redo-action" title="Rehacer acción" disabled>
+                                    <i class="fa-solid fa-rotate-right"></i>
+                                </button>
+                            </div>
+                            <button type="button" class="btn btn-outline-dark btn-sm fw-semibold" id="btn-toggle-fullscreen" title="Modo Pantalla Completa (Ocultar / Mostrar menú lateral)">
+                                <i class="fa-solid fa-expand me-1"></i> <span id="lbl-fullscreen-text">Pantalla Completa</span>
                             </button>
-                            <button type="button" class="btn btn-outline-secondary" id="btn-redo-action" title="Rehacer acción" disabled>
-                                <i class="fa-solid fa-rotate-right"></i>
+                            {% if current_user.role == 'ADMIN' %}
+                            <button type="button" class="btn btn-outline-secondary btn-sm fw-semibold" id="btn-reset-census" title="Restablecer camas y bloques originales desde el Censo de la semana (Solo Administrador)">
+                                <i class="fa-solid fa-arrows-rotate me-1 text-primary"></i> Restablecer Censo
+                            </button>
+                            {% endif %}
+                            <button type="button" class="btn btn-primary btn-sm fw-semibold" id="btn-add-siembra-poda" title="Añadir un nuevo bloque al plan (ej. bloque de 16 semanas, siembra o fuera de regla)">
+                                <i class="fa-solid fa-plus me-1"></i> Añadir Bloque
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm fw-semibold" id="btn-save-draft-review" title="Guardar borrador de trabajo">
+                                <i class="fa-solid fa-floppy-disk me-1"></i> Borrador
+                            </button>
+                            <button type="button" class="btn btn-success btn-sm fw-bold shadow-sm" id="btn-open-assign-modal" title="Validar y asignar a vuelta">
+                                <i class="fa-solid fa-calendar-check me-1"></i> Asignar a Vuelta
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-close-crop-workspace" title="Ocultar mesa y volver al resumen">
+                                <i class="fa-solid fa-xmark"></i>
                             </button>
                         </div>
-                        <button type="button" class="btn btn-outline-danger btn-sm fw-semibold" id="btn-add-siembra-poda" title="Agregar bloque manual">
-                            <i class="fa-solid fa-plus me-1"></i> Siembra/Poda
-                        </button>
-                        <button type="button" class="btn btn-outline-secondary btn-sm fw-semibold" id="btn-save-draft-review" title="Guardar borrador de trabajo">
-                            <i class="fa-solid fa-floppy-disk me-1"></i> Borrador
-                        </button>
-                        <button type="button" class="btn btn-success btn-sm fw-bold shadow-sm" id="btn-open-assign-modal" title="Validar y asignar a vuelta">
-                            <i class="fa-solid fa-calendar-check me-1"></i> Asignar a Vuelta
-                        </button>
                     </div>
-                </div>
 
-                <!-- Comparison Quick Filters & Validation Status Bar -->
-                <div class="d-flex justify-content-between align-items-center mt-2 pt-1 border-top flex-wrap gap-2 small">
-                    <div class="d-flex align-items-center gap-3">
-                        <div class="form-check form-check-inline mb-0">
-                            <input class="form-check-input" type="checkbox" id="cb-filter-coincident">
-                            <label class="form-check-label small text-muted" for="cb-filter-coincident">
-                                <i class="fa-solid fa-code-compare text-primary me-1"></i> Solo bloques en ambos lados
-                            </label>
+                    <!-- Comparison Quick Filters & Validation Status Bar -->
+                    <div class="d-flex justify-content-between align-items-center mt-2 pt-1 border-top flex-wrap gap-2 small">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="form-check form-check-inline mb-0">
+                                <input class="form-check-input" type="checkbox" id="cb-filter-coincident">
+                                <label class="form-check-label small text-primary fw-semibold" for="cb-filter-coincident">
+                                    <i class="fa-solid fa-code-compare text-primary me-1"></i> Solo bloques en ambos lados (Veg y Prod)
+                                </label>
+                            </div>
+                            <div class="form-check form-check-inline mb-0">
+                                <input class="form-check-input" type="checkbox" id="cb-filter-duplicates">
+                                <label class="form-check-label small text-danger fw-semibold" for="cb-filter-duplicates">
+                                    <i class="fa-solid fa-triangle-exclamation text-danger me-1"></i> Solo bloques divididos / con duplicados
+                                </label>
+                            </div>
                         </div>
-                        <div class="form-check form-check-inline mb-0">
-                            <input class="form-check-input" type="checkbox" id="cb-filter-differences">
-                            <label class="form-check-label small text-muted" for="cb-filter-differences">
-                                <i class="fa-solid fa-not-equal text-warning me-1"></i> Solo bloques con diferencias
-                            </label>
-                        </div>
-                    </div>
-                    <div id="cuadre-validation-status" class="d-flex align-items-center gap-2">
-                        <span class="badge bg-success-subtle text-success border border-success-subtle">
-                            <i class="fa-solid fa-circle-check me-1"></i> Sin camas duplicadas
-                        </span>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Live Visual Comparison Bar (Appears when clicking or focusing on a block) -->
-        <div id="visual-comparison-card" class="card mb-2 shadow-sm border-primary" style="display: none; background: #f0fdf4;">
-            <div class="card-body py-1 px-3">
-                <div class="d-flex justify-content-between align-items-center mb-1">
-                    <div class="d-flex align-items-center gap-2">
-                        <span class="badge bg-primary fs-6 font-monospace" id="comp-block-name">BL 16</span>
-                        <span class="fw-bold text-dark" id="comp-crop-name">HYPERICUM</span>
-                        <span class="text-muted small" id="comp-zone-name">(ZONA 1)</span>
-                    </div>
-                    <button type="button" class="btn-close btn-close-sm" onclick="document.getElementById('visual-comparison-card').style.display='none';"></button>
-                </div>
-                <div class="row g-2 align-items-center small">
-                    <div class="col-md-6 border-end">
-                        <div class="d-flex align-items-center gap-2">
-                            <span class="badge bg-primary text-white">🟦 VEGETATIVO</span>
-                            <span class="font-monospace fw-bold text-dark" id="comp-veg-beds">Camas: -</span>
-                            <span class="text-muted" id="comp-veg-info"></span>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="d-flex align-items-center gap-2">
-                            <span class="badge bg-warning text-dark">🟨 PRODUCTIVO</span>
-                            <span class="font-monospace fw-bold text-dark" id="comp-prod-beds">Camas: -</span>
-                            <span class="text-muted" id="comp-prod-info"></span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- TWO WORKING PANELS SIDE BY SIDE: 🟦 VEGETATIVO (Left) | 🟨 PRODUCTIVO (Right) -->
-        <div class="row g-2">
-            <!-- LEFT PANEL: 🟦 VEGETATIVO -->
-            <div class="col-lg-6">
-                <div class="card shadow-sm border-top border-4 border-primary h-100">
-                    <div class="card-header bg-primary text-white py-1 px-2 d-flex justify-content-between align-items-center">
-                        <div class="d-flex align-items-center gap-2">
-                            <span class="fs-6 fw-bold">🟦 VEGETATIVO</span>
-                            <span class="badge bg-white text-primary fw-bold" id="veg-panel-count">0 bloques</span>
-                        </div>
-                        <div class="d-flex align-items-center gap-3 small font-monospace">
-                            <span>Camas: <strong id="veg-panel-beds" class="text-white">0.00</strong></span>
-                            <span>Litros: <strong id="veg-panel-liters" class="text-white">0.0 L</strong></span>
-                        </div>
-                    </div>
-                    <div class="card-body p-0">
-                        <div class="table-responsive" style="max-height: 580px; min-height: 250px;">
-                            <table class="table table-hover table-sm align-middle mb-0 cuadre-table" id="table-veg-cuadre" style="font-size: 0.76rem;">
-                                <thead class="table-light sticky-top text-center" style="font-size: 0.72rem;">
-                                    <tr>
-                                        <th style="width: 50px;">Zona</th>
-                                        <th style="width: 55px;">Bloque</th>
-                                        <th style="width: 32px;">Suf</th>
-                                        <th>Variedad</th>
-                                        <th style="width: 65px;">Camas</th>
-                                        <th style="width: 48px;">Std</th>
-                                        <th style="width: 45px;">Edad</th>
-                                        <th style="width: 45px;">L/Cam</th>
-                                        <th style="width: 52px;">Litros</th>
-                                        <th style="width: 60px;">Lanza</th>
-                                        <th style="width: 95px;" class="text-end">Acción</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="tbody-veg-cuadre">
-                                    <!-- Dynamic rows loaded via JS -->
-                                </tbody>
-                            </table>
+                        <div id="cuadre-validation-status" class="d-flex align-items-center gap-2">
+                            <span class="badge bg-success-subtle text-success border border-success-subtle">
+                                <i class="fa-solid fa-circle-check me-1"></i> Sin camas duplicadas
+                            </span>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- RIGHT PANEL: 🟨 PRODUCTIVO -->
-            <div class="col-lg-6">
-                <div class="card shadow-sm border-top border-4 border-warning h-100">
-                    <div class="card-header bg-warning text-dark py-1 px-2 d-flex justify-content-between align-items-center">
+            <!-- Live Visual Comparison Bar (Appears when clicking or focusing on a block) -->
+            <div id="visual-comparison-card" class="card mb-2 shadow-sm border-primary" style="display: none; background: #f0fdf4;">
+                <div class="card-body py-1 px-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
                         <div class="d-flex align-items-center gap-2">
-                            <span class="fs-6 fw-bold">🟨 PRODUCTIVO</span>
-                            <span class="badge bg-dark text-white fw-bold" id="prod-panel-count">0 bloques</span>
+                            <span class="badge bg-primary fs-6 font-monospace" id="comp-block-name">BL 16</span>
+                            <span class="fw-bold text-dark" id="comp-crop-name">GYPSOPHILA</span>
+                            <span class="text-muted small" id="comp-zone-name">(ZONA 1)</span>
                         </div>
-                        <div class="d-flex align-items-center gap-3 small font-monospace text-dark">
-                            <span>Camas: <strong id="prod-panel-beds" class="text-dark">0.00</strong></span>
-                            <span>Litros: <strong id="prod-panel-liters" class="text-dark">0.0 L</strong></span>
+                        <button type="button" class="btn-close btn-close-sm" onclick="document.getElementById('visual-comparison-card').style.display='none';"></button>
+                    </div>
+                    <div class="row g-2 align-items-center small">
+                        <div class="col-md-6 border-end">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="badge bg-primary text-white">🟦 VEGETATIVO</span>
+                                <span class="font-monospace fw-bold text-dark" id="comp-veg-beds">Camas: -</span>
+                                <span class="text-muted" id="comp-veg-info"></span>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="badge bg-warning text-dark">🟨 PRODUCTIVO</span>
+                                <span class="font-monospace fw-bold text-dark" id="comp-prod-beds">Camas: -</span>
+                                <span class="text-muted" id="comp-prod-info"></span>
+                            </div>
                         </div>
                     </div>
-                    <div class="card-body p-0">
-                        <div class="table-responsive" style="max-height: 580px; min-height: 250px;">
-                            <table class="table table-hover table-sm align-middle mb-0 cuadre-table" id="table-prod-cuadre" style="font-size: 0.76rem;">
-                                <thead class="table-light sticky-top text-center" style="font-size: 0.72rem;">
-                                    <tr>
-                                        <th style="width: 50px;">Zona</th>
-                                        <th style="width: 55px;">Bloque</th>
-                                        <th style="width: 32px;">Suf</th>
-                                        <th>Variedad</th>
-                                        <th style="width: 65px;">Camas</th>
-                                        <th style="width: 48px;">Std</th>
-                                        <th style="width: 45px;">Edad</th>
-                                        <th style="width: 45px;">L/Cam</th>
-                                        <th style="width: 52px;">Litros</th>
-                                        <th style="width: 60px;">Lanza</th>
-                                        <th style="width: 95px;" class="text-end">Acción</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="tbody-prod-cuadre">
-                                    <!-- Dynamic rows loaded via JS -->
-                                </tbody>
-                            </table>
+                </div>
+            </div>
+
+            <!-- TWO WORKING PANELS SIDE BY SIDE: 🟦 VEGETATIVO (Left) | 🟨 PRODUCTIVO (Right) -->
+            <div class="row g-2">
+                <!-- LEFT PANEL: 🟦 VEGETATIVO -->
+                <div class="col-lg-6">
+                    <div class="card shadow-sm border-top border-4 border-primary h-100">
+                        <div class="card-header bg-primary text-white py-1 px-2 d-flex justify-content-between align-items-center flex-wrap gap-1">
+                            <div class="d-flex align-items-center gap-1">
+                                <span class="fs-6 fw-bold">🟦 VEGETATIVO</span>
+                                <span class="badge bg-white text-primary fw-bold" id="veg-panel-count">0 bloques</span>
+                                <button type="button" class="btn btn-sm btn-light text-primary fw-bold py-0 px-2 btn-add-block-stage shadow-xs" data-stage="VEGETATIVO" title="Añadir un nuevo bloque a Vegetativo">
+                                    <i class="fa-solid fa-plus me-1"></i> Añadir Bloque
+                                </button>
+                                <div id="bulk-actions-veg" class="d-flex align-items-center gap-1 ms-1" style="display: none !important;">
+                                    <button type="button" class="btn btn-danger btn-sm py-0 px-2 fw-bold btn-bulk-delete" data-stage="VEGETATIVO" title="Eliminar los bloques seleccionados">
+                                        <i class="fa-solid fa-trash-can me-1"></i> Borrar (<span id="bulk-count-veg">0</span>)
+                                    </button>
+                                    <button type="button" class="btn btn-warning btn-sm py-0 px-2 fw-bold text-dark btn-bulk-move" data-stage="VEGETATIVO" data-target="PRODUCTIVO" title="Mover bloques seleccionados a Productivo">
+                                        <i class="fa-solid fa-arrow-right me-1"></i> A Prod (<span id="bulk-move-count-veg">0</span>)
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="d-flex align-items-center gap-3 small font-monospace">
+                                <span>Camas: <strong id="veg-panel-beds" class="text-white">0.00</strong></span>
+                                <span>Litros: <strong id="veg-panel-liters" class="text-white">0.0 L</strong></span>
+                            </div>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="table-responsive" style="max-height: 580px; min-height: 250px;">
+                                <table class="table table-hover table-sm align-middle mb-0 cuadre-table" id="table-veg-cuadre">
+                                    <thead class="table-light sticky-top text-center">
+                                        <tr>
+                                            <th style="width: 18px;" class="text-center" title="Arrastrar y soltar para ordenar"><i class="fa-solid fa-grip-vertical text-muted" style="font-size: 0.72rem;"></i></th>
+                                            <th style="width: 24px;" class="text-center"><input type="checkbox" class="form-check-input select-all-checkbox" data-stage="VEGETATIVO" title="Seleccionar todos en Vegetativo"></th>
+                                            <th style="width: 54px;">Bloque</th>
+                                            <th style="width: 22px;">Suf</th>
+                                            <th>Variedad</th>
+                                            <th style="width: 96px;">Camas (Ini-Fin)</th>
+                                            <th style="width: 44px;" title="Camas estándar">Std</th>
+                                            <th style="width: 38px;" title="Edad fenológica">Edad</th>
+                                            <th style="width: 42px;" title="Litros por cama">L/Cam</th>
+                                            <th style="width: 74px;">Lanza</th>
+                                            <th style="width: 88px;" class="text-end">Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="tbody-veg-cuadre">
+                                        <!-- Dynamic rows loaded via JS -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- RIGHT PANEL: 🟨 PRODUCTIVO -->
+                <div class="col-lg-6">
+                    <div class="card shadow-sm border-top border-4 border-warning h-100">
+                        <div class="card-header bg-warning text-dark py-1 px-2 d-flex justify-content-between align-items-center flex-wrap gap-1">
+                            <div class="d-flex align-items-center gap-1">
+                                <span class="fs-6 fw-bold">🟨 PRODUCTIVO</span>
+                                <span class="badge bg-dark text-white fw-bold" id="prod-panel-count">0 bloques</span>
+                                <button type="button" class="btn btn-sm btn-dark text-white fw-bold py-0 px-2 btn-add-block-stage shadow-xs" data-stage="PRODUCTIVO" title="Añadir un nuevo bloque a Productivo">
+                                    <i class="fa-solid fa-plus me-1"></i> Añadir Bloque
+                                </button>
+                                <div id="bulk-actions-prod" class="d-flex align-items-center gap-1 ms-1" style="display: none !important;">
+                                    <button type="button" class="btn btn-danger btn-sm py-0 px-2 fw-bold btn-bulk-delete" data-stage="PRODUCTIVO" title="Eliminar los bloques seleccionados">
+                                        <i class="fa-solid fa-trash-can me-1"></i> Borrar (<span id="bulk-count-prod">0</span>)
+                                    </button>
+                                    <button type="button" class="btn btn-primary btn-sm py-0 px-2 fw-bold btn-bulk-move" data-stage="PRODUCTIVO" data-target="VEGETATIVO" title="Mover bloques seleccionados a Vegetativo">
+                                        <i class="fa-solid fa-arrow-left me-1"></i> A Veg (<span id="bulk-move-count-prod">0</span>)
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="d-flex align-items-center gap-3 small font-monospace text-dark">
+                                <span>Camas: <strong id="prod-panel-beds" class="text-dark">0.00</strong></span>
+                                <span>Litros: <strong id="prod-panel-liters" class="text-dark">0.0 L</strong></span>
+                            </div>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="table-responsive" style="max-height: 580px; min-height: 250px;">
+                                <table class="table table-hover table-sm align-middle mb-0 cuadre-table" id="table-prod-cuadre">
+                                    <thead class="table-light sticky-top text-center">
+                                        <tr>
+                                            <th style="width: 18px;" class="text-center" title="Arrastrar y soltar para ordenar"><i class="fa-solid fa-grip-vertical text-muted" style="font-size: 0.72rem;"></i></th>
+                                            <th style="width: 24px;" class="text-center"><input type="checkbox" class="form-check-input select-all-checkbox" data-stage="PRODUCTIVO" title="Seleccionar todos en Productivo"></th>
+                                            <th style="width: 54px;">Bloque</th>
+                                            <th style="width: 22px;">Suf</th>
+                                            <th>Variedad</th>
+                                            <th style="width: 96px;">Camas (Ini-Fin)</th>
+                                            <th style="width: 44px;" title="Camas estándar">Std</th>
+                                            <th style="width: 38px;" title="Edad fenológica">Edad</th>
+                                            <th style="width: 42px;" title="Litros por cama">L/Cam</th>
+                                            <th style="width: 74px;">Lanza</th>
+                                            <th style="width: 88px;" class="text-end">Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="tbody-prod-cuadre">
+                                        <!-- Dynamic rows loaded via JS -->
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -803,82 +985,93 @@
     </div>
 </div>
 
-<!-- Modal Add Camas Siembra / Poda Presupuestadas -->
+<!-- Modal Add Camas / Bloque Manual -->
 <div class="modal fade" id="modalSiembraPoda" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header bg-light py-2">
-                <h6 class="modal-title fw-bold text-danger"><i class="fa-solid fa-plus me-1"></i> Aumentar Camas de Presupuesto Siembra / Poda</h6>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        <div class="modal-content shadow-lg">
+            <div class="modal-header bg-primary text-white py-2">
+                <h6 class="modal-title fw-bold"><i class="fa-solid fa-circle-plus me-2"></i> Añadir Bloque al Plan de Calibración</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body">
+            <div class="modal-body p-3">
+                <p class="small text-muted mb-2">
+                    Ingresa los datos del bloque a incorporar (ej. un bloque de Gypsophila quedado de edad 16, siembra nueva o fuera de regla).
+                </p>
                 <div class="row g-2">
                     <div class="col-6">
-                        <label class="form-label small fw-semibold">Vuelta:</label>
-                        <select id="modal-sp-round" class="form-select form-select-sm">
-                            {% for item in rounds_calculated %}
-                            <option value="{{ item.round.id }}">{{ item.round.name }} ({{ item.round.scheduled_day }})</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="col-6">
-                        <label class="form-label small fw-semibold">Bloque:</label>
-                        <input type="text" id="modal-sp-block" class="form-control form-control-sm fw-bold" placeholder="ej. BL  15" required list="block-datalist">
+                        <label class="form-label small fw-bold text-dark mb-0">Bloque:</label>
+                        <input type="text" id="modal-sp-block" class="form-control form-control-sm fw-bold font-monospace text-primary" placeholder="ej. BL 16" required list="block-datalist">
                         <datalist id="block-datalist">
                             {% for b_name, b_info in block_zone_map.items() %}
-                            <option value="{{ b_name }}">{{ b_name }} ({{ b_info.zone }})</option>
+                            <option value="{{ b_name }}">{{ b_name }} ({{ b_info.zone }} - {{ b_info.crop }})</option>
                             {% endfor %}
                         </datalist>
                     </div>
                     <div class="col-6">
-                        <label class="form-label small fw-semibold">Zona (Auto):</label>
-                        <input type="text" id="modal-sp-zone" class="form-control form-control-sm bg-light" placeholder="Auto-asignada" readonly>
+                        <label class="form-label small fw-bold text-dark mb-0">Zona:</label>
+                        <input type="text" id="modal-sp-zone" class="form-control form-control-sm bg-light font-monospace" placeholder="ej. ZONA 1" value="ZONA 1">
                     </div>
                     <div class="col-6">
-                        <label class="form-label small fw-semibold">Sufijo:</label>
-                        <input type="text" id="modal-sp-suffix" class="form-control form-control-sm text-center fw-bold" value="A" required>
-                    </div>
-                    <div class="col-6">
-                        <label class="form-label small fw-semibold">Cultivo:</label>
-                        <select id="modal-sp-crop" class="form-select form-select-sm">
+                        <label class="form-label small fw-bold text-dark mb-0">Cultivo:</label>
+                        <select id="modal-sp-crop" class="form-select form-select-sm fw-bold">
                             {% for c in active_crops %}
                             <option value="{{ c.name }}">{{ c.name }}</option>
                             {% endfor %}
                         </select>
                     </div>
                     <div class="col-6">
-                        <label class="form-label small fw-semibold">Estado:</label>
-                        <select id="modal-sp-stage" class="form-select form-select-sm">
-                            <option value="VEGETATIVO">VEGETATIVO</option>
-                            <option value="PRODUCTIVO">PRODUCTIVO</option>
+                        <label class="form-label small fw-bold text-dark mb-0">Estado Fenológico:</label>
+                        <select id="modal-sp-stage" class="form-select form-select-sm fw-bold">
+                            <option value="VEGETATIVO">🟦 VEGETATIVO</option>
+                            <option value="PRODUCTIVO">🟨 PRODUCTIVO</option>
                         </select>
                     </div>
                     <div class="col-4">
-                        <label class="form-label small fw-semibold">Edad (sem):</label>
-                        <input type="number" id="modal-sp-age" class="form-control form-control-sm text-center" value="2">
+                        <label class="form-label small fw-bold text-dark mb-0">Edad (sem):</label>
+                        <input type="text" id="modal-sp-age" class="form-control form-control-sm text-center font-monospace" value="16" placeholder="ej. 16">
                     </div>
                     <div class="col-4">
-                        <label class="form-label small fw-semibold">Cama Ini:</label>
-                        <input type="number" id="modal-sp-bed-start" class="form-control form-control-sm text-center" value="1">
+                        <label class="form-label small fw-bold text-dark mb-0">Cama Ini:</label>
+                        <input type="number" id="modal-sp-bed-start" class="form-control form-control-sm text-center font-monospace" value="1" min="1">
                     </div>
                     <div class="col-4">
-                        <label class="form-label small fw-semibold">Cama Fin:</label>
-                        <input type="number" id="modal-sp-bed-end" class="form-control form-control-sm text-center" value="10">
+                        <label class="form-label small fw-bold text-dark mb-0">Cama Fin:</label>
+                        <input type="number" id="modal-sp-bed-end" class="form-control form-control-sm text-center font-monospace" value="32" min="1">
                     </div>
-                    <div class="col-6">
-                        <label class="form-label small fw-semibold">Camas Estándar:</label>
-                        <input type="number" step="0.01" id="modal-sp-std-beds" class="form-control form-control-sm text-end fw-bold" value="10.0">
+                    <div class="col-4">
+                        <label class="form-label small fw-bold text-dark mb-0">Sufijo:</label>
+                        <input type="text" id="modal-sp-suffix" class="form-control form-control-sm text-center fw-bold font-monospace" value="A">
                     </div>
-                    <div class="col-6">
-                        <label class="form-label small fw-semibold">L/Cama:</label>
-                        <input type="number" step="0.5" id="modal-sp-liters-bed" class="form-control form-control-sm text-end" value="5.5">
+                    <div class="col-4">
+                        <label class="form-label small fw-bold text-dark mb-0">Camas Std:</label>
+                        <input type="number" step="0.01" id="modal-sp-std-beds" class="form-control form-control-sm text-end fw-bold font-monospace" value="32.00">
+                    </div>
+                    <div class="col-4">
+                        <label class="form-label small fw-bold text-dark mb-0">L/Cama:</label>
+                        <input type="number" step="0.5" id="modal-sp-liters-bed" class="form-control form-control-sm text-end font-monospace" value="5.5">
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label small fw-bold text-dark mb-0">Tipo de Lanza / Boquilla:</label>
+                        <select id="modal-sp-lance" class="form-select form-select-sm fw-semibold">
+                            <option value="Lanza de 3 salidas (C35)">Lanza de 3 salidas (C35)</option>
+                            <option value="Aguilón Solidago">Aguilón Solidago</option>
+                            <option value="Aguilón 5 salidas (2D35-3C35)">Aguilón 5 salidas (2D35-3C35)</option>
+                            <option value="Aguilón 4 salidas (1D35-3C35)">Aguilón 4 salidas (1D35-3C35)</option>
+                            <option value="Lanza Veronica">Lanza Veronica</option>
+                        </select>
+                    </div>
+                    <div class="col-12 mt-2">
+                        <div class="p-2 bg-light border rounded d-flex justify-content-between align-items-center">
+                            <span class="small fw-bold text-secondary">Litros Totales Calculados:</span>
+                            <span class="fs-6 fw-bold font-monospace text-success" id="modal-sp-total-liters-badge">176.0 L</span>
+                        </div>
                     </div>
                 </div>
             </div>
-            <div class="modal-footer py-2">
+            <div class="modal-footer py-2 bg-light">
                 <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-danger btn-sm fw-semibold" id="btn-confirm-add-siembra-poda">
-                    <i class="fa-solid fa-plus me-1"></i> Insertar Camas al Plan
+                <button type="button" class="btn btn-success btn-sm fw-bold shadow-sm" id="btn-confirm-add-siembra-poda">
+                    <i class="fa-solid fa-plus me-1"></i> Insertar Bloque al Plan
                 </button>
             </div>
         </div>
@@ -906,32 +1099,38 @@ const ACTIVE_PRODUCTS = [
 ];
 const ROTATION_FORMULAS_MAP = {{ rotation_formulas_map|tojson if rotation_formulas_map else "{}" }};
 
-// Initial master segments from server
-let masterSegments = [
-    {% if rounds_calculated and rounds_calculated[0] and rounds_calculated[0].calc.segments %}
-    {% for s in rounds_calculated[0].calc.segments %}
-    {
-        uid: "seg_{{ loop.index }}_{{ s.block_name|replace(' ', '_') }}",
-        zone: "{{ s.zone or '' }}",
-        block_name: "{{ s.block_name }}",
-        suffix: "{{ s.suffix or 'A' }}",
-        crop_name: "{{ s.crop_name }}",
-        variety: "{{ s.variety or s.crop_name }}",
-        phenological_stage: "{{ s.phenological_stage or 'VEGETATIVO' }}",
-        real_age: "{{ s.real_age|format_age }}",
-        bed_start: {{ s.bed_start or 1 }},
-        bed_end: {{ s.bed_end or 1 }},
-        standard_beds: {{ s.standard_beds or 1.0 }},
-        liters_per_bed: {{ s.liters_per_bed or 5.5 }},
-        total_liters: {{ s.total_liters or 0.0 }},
-        spray_lance: "{{ s.spray_lance or 'Lanza 2 Boquillas' }}",
-        products: {{ s.products|tojson if s.products else "[]" }},
-        is_custom_mix: {{ "true" if s.is_custom_mix else "false" }},
-        is_additional: {{ "true" if s.is_additional else "false" }}
-    }{% if not loop.last %},{% endif %}
+// Map of calibrated segments per round
+const ROUND_SEGMENTS_MAP = {
+    {% for r_item in rounds_calculated %}
+    "{{ r_item.round.id }}": [
+        {% for s in r_item.calc.segments %}
+        {
+            uid: "seg_{{ loop.index }}_{{ r_item.round.id }}_{{ s.block_name|replace(' ', '_') }}",
+            zone: "{{ s.zone or '' }}",
+            block_name: "{{ s.block_name }}",
+            suffix: "{{ s.suffix or 'A' }}",
+            crop_name: "{{ s.crop_name }}",
+            variety: "{{ s.variety or s.crop_name }}",
+            phenological_stage: "{{ s.phenological_stage or 'VEGETATIVO' }}",
+            real_age: "{{ s.real_age|format_age }}",
+            bed_start: {{ s.bed_start or 1 }},
+            bed_end: {{ s.bed_end or 1 }},
+            standard_beds: {{ s.standard_beds or 1.0 }},
+            liters_per_bed: {{ s.liters_per_bed or 5.5 }},
+            total_liters: {{ s.total_liters or 0.0 }},
+            spray_lance: "{{ s.spray_lance or 'Lanza de 3 salidas (C35)' }}",
+            products: {{ s.products_detail|tojson if s.products_detail else (s.products|tojson if s.products else "[]") }},
+            is_custom_mix: {{ "true" if s.is_custom_mix else "false" }},
+            is_additional: {{ "true" if s.is_additional else "false" }},
+            is_modified: {{ "true" if s.is_modified else "false" }}
+        }{% if not loop.last %},{% endif %}
+        {% endfor %}
+    ]{% if not loop.last %},{% endif %}
     {% endfor %}
-    {% endif %}
-];
+};
+
+let currentActiveRoundId = "{{ rounds_calculated[0].round.id if rounds_calculated else '' }}";
+let masterSegments = JSON.parse(JSON.stringify(ROUND_SEGMENTS_MAP[currentActiveRoundId] || []));
 
 // Ensure unique uids if needed
 let uidCounter = 1000;
@@ -940,7 +1139,7 @@ masterSegments.forEach(s => {
         s.uid = 'seg_' + (++uidCounter);
     }
     if (!s.spray_lance) {
-        s.spray_lance = 'Lanza 2 Boquillas';
+        s.spray_lance = 'Lanza de 3 salidas (C35)';
     }
 });
 
@@ -960,6 +1159,12 @@ function updateUndoRedoButtons() {
     const btnRedo = document.getElementById('btn-redo-action');
     if (btnUndo) btnUndo.disabled = (undoStack.length === 0);
     if (btnRedo) btnRedo.disabled = (redoStack.length === 0);
+}
+
+function roundToTank20(liters) {
+    const val = parseFloat(liters) || 0;
+    if (val <= 0) return 0;
+    return Math.ceil(val / 20) * 20;
 }
 
 function normalizeCropName(name) {
@@ -1026,9 +1231,86 @@ document.addEventListener('DOMContentLoaded', function() {
         cropSelect.addEventListener('change', function() {
             sessionStorage.setItem('fumigacion_filter_crop', this.value);
             updateVarietyProgress();
+            document.querySelectorAll('.btn-crop-pill').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.crop === this.value);
+            });
+            document.querySelectorAll('.crop-summary-card').forEach(card => {
+                const isMatch = (normalizeCropName(card.dataset.crop) === normalizeCropName(this.value));
+                card.classList.toggle('border-primary', isMatch);
+                card.classList.toggle('bg-primary-subtle', isMatch);
+            });
             renderCuadrePanels();
         });
     }
+
+    const roundFilterSelect = document.getElementById('filter-cuadre-round');
+    if (roundFilterSelect) {
+        roundFilterSelect.addEventListener('change', function() {
+            const newRoundId = this.value;
+            if (newRoundId === currentActiveRoundId) return;
+            // Save state of current round in map before switching
+            ROUND_SEGMENTS_MAP[currentActiveRoundId] = JSON.parse(JSON.stringify(masterSegments));
+            currentActiveRoundId = newRoundId;
+            masterSegments = JSON.parse(JSON.stringify(ROUND_SEGMENTS_MAP[newRoundId] || []));
+            undoStack = [];
+            redoStack = [];
+            updateUndoRedoButtons();
+            renderCuadrePanels();
+        });
+    }
+
+    function openCropWorkspace(cropName) {
+        const placeholder = document.getElementById('no-crop-selected-placeholder');
+        const workspace = document.getElementById('crop-workspace-container');
+        if (placeholder) placeholder.style.display = 'none';
+        if (workspace) workspace.style.display = 'block';
+
+        if (cropSelect) {
+            cropSelect.value = cropName;
+            sessionStorage.setItem('fumigacion_filter_crop', cropName);
+            updateVarietyProgress();
+        }
+        document.querySelectorAll('.btn-crop-pill').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.crop === cropName);
+        });
+        document.querySelectorAll('.crop-summary-card').forEach(card => {
+            const isMatch = (normalizeCropName(card.dataset.crop) === normalizeCropName(cropName));
+            card.classList.toggle('border-primary', isMatch);
+            card.classList.toggle('bg-primary-subtle', isMatch);
+        });
+        renderCuadrePanels();
+    }
+
+    function closeCropWorkspace() {
+        const placeholder = document.getElementById('no-crop-selected-placeholder');
+        const workspace = document.getElementById('crop-workspace-container');
+        if (placeholder) placeholder.style.display = 'block';
+        if (workspace) workspace.style.display = 'none';
+        document.querySelectorAll('.crop-summary-card').forEach(card => {
+            card.classList.remove('border-primary', 'bg-primary-subtle');
+        });
+        sessionStorage.removeItem('fumigacion_filter_crop');
+    }
+
+    document.getElementById('btn-close-crop-workspace')?.addEventListener('click', closeCropWorkspace);
+
+    // Crop Pills Click
+    document.querySelectorAll('.btn-crop-pill').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const crop = this.dataset.crop;
+            if (!crop) return;
+            openCropWorkspace(crop);
+        });
+    });
+
+    // Crop Summary Deck Cards Click
+    document.querySelectorAll('.crop-summary-card, .btn-card-calibrate').forEach(el => {
+        el.addEventListener('click', function(e) {
+            const crop = this.dataset.crop;
+            if (!crop) return;
+            openCropWorkspace(crop);
+        });
+    });
 
     if (prevVarBtn && cropSelect) {
         prevVarBtn.addEventListener('click', function() {
@@ -1052,7 +1334,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const searchInput = document.getElementById('filter-cuadre-block-search');
     const clearSearchBtn = document.getElementById('btn-clear-search');
     const filterCoincidentCb = document.getElementById('cb-filter-coincident');
-    const filterDiffCb = document.getElementById('cb-filter-differences');
+    const filterDuplicatesCb = document.getElementById('cb-filter-duplicates');
 
     if (searchInput) {
         searchInput.addEventListener('input', function() {
@@ -1072,7 +1354,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     if (filterCoincidentCb) filterCoincidentCb.addEventListener('change', renderCuadrePanels);
-    if (filterDiffCb) filterDiffCb.addEventListener('change', renderCuadrePanels);
+    if (filterDuplicatesCb) filterDuplicatesCb.addEventListener('change', renderCuadrePanels);
 
     // ==================== UNDO / REDO LISTENERS ====================
     document.getElementById('btn-undo-action')?.addEventListener('click', function() {
@@ -1111,7 +1393,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const selectedCrop = (cropSelect ? cropSelect.value : 'ALL').trim().toUpperCase();
         const searchQ = (searchInput ? searchInput.value : '').trim().toUpperCase().replace(/\s+/g, '');
         const onlyCoincident = filterCoincidentCb ? filterCoincidentCb.checked : false;
-        const onlyDiff = filterDiffCb ? filterDiffCb.checked : false;
+        const onlyDuplicates = filterDuplicatesCb ? filterDuplicatesCb.checked : false;
 
         const tbodyVeg = document.getElementById('tbody-veg-cuadre');
         const tbodyProd = document.getElementById('tbody-prod-cuadre');
@@ -1124,14 +1406,23 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Group segments by block to calculate occurrences and differences
         const blockSummary = {};
+        const vegBlockCounts = {};
+        const prodBlockCounts = {};
+
         masterSegments.forEach(s => {
             const bKey = (s.block_name || '').trim().toUpperCase();
             if (!blockSummary[bKey]) {
                 blockSummary[bKey] = { count: 0, veg: 0, prod: 0, crops: new Set() };
             }
             blockSummary[bKey].count++;
-            if (s.phenological_stage === 'VEGETATIVO') blockSummary[bKey].veg++;
-            if (s.phenological_stage === 'PRODUCTIVO') blockSummary[bKey].prod++;
+            if (s.phenological_stage === 'VEGETATIVO') {
+                blockSummary[bKey].veg++;
+                vegBlockCounts[bKey] = (vegBlockCounts[bKey] || 0) + 1;
+            }
+            if (s.phenological_stage === 'PRODUCTIVO') {
+                blockSummary[bKey].prod++;
+                prodBlockCounts[bKey] = (prodBlockCounts[bKey] || 0) + 1;
+            }
             blockSummary[bKey].crops.add(s.crop_name);
         });
 
@@ -1144,49 +1435,40 @@ document.addEventListener('DOMContentLoaded', function() {
             const sBlock = (s.block_name || '').trim().toUpperCase().replace(/\s+/g, '');
             const bKey = (s.block_name || '').trim().toUpperCase();
             const bInfo = blockSummary[bKey] || { veg: 0, prod: 0, count: 0 };
+            const isDuplicated = (s.phenological_stage === 'VEGETATIVO' && vegBlockCounts[bKey] > 1) || (s.phenological_stage === 'PRODUCTIVO' && prodBlockCounts[bKey] > 1);
 
             const matchCrop = (selectedCrop === 'ALL' || sCrop === selectedCrop || sCrop.includes(selectedCrop));
             const matchSearch = (!searchQ || sBlock.includes(searchQ));
             const matchCoincident = (!onlyCoincident || (bInfo.veg > 0 && bInfo.prod > 0));
-            const matchDiff = (!onlyDiff || bInfo.count > 1);
+            const matchDuplicates = (!onlyDuplicates || isDuplicated);
 
-            if (matchCrop && matchSearch && matchCoincident && matchDiff) {
+            if (matchCrop && matchSearch && matchCoincident && matchDuplicates) {
                 if (s.phenological_stage === 'VEGETATIVO') {
-                    vegSegments.push(s);
+                    vegSegments.push({ seg: s, isDuplicated: isDuplicated });
                 } else {
-                    prodSegments.push(s);
+                    prodSegments.push({ seg: s, isDuplicated: isDuplicated });
                 }
             }
         });
 
-        // Sort function: by Zone -> Block -> Suffix -> Bed Start
-        function sortSegs(a, b) {
-            const zComp = (a.zone || '').localeCompare(b.zone || '');
-            if (zComp !== 0) return zComp;
-            const bComp = (a.block_name || '').localeCompare(b.block_name || '', undefined, { numeric: true });
-            if (bComp !== 0) return bComp;
-            const sComp = (a.suffix || '').localeCompare(b.suffix || '');
-            if (sComp !== 0) return sComp;
-            return (a.bed_start || 0) - (b.bed_start || 0);
-        }
-
-        vegSegments.sort(sortSegs);
-        prodSegments.sort(sortSegs);
+        // Retain exact user-defined sequence from masterSegments (e.g. custom Drag & Drop ordering)
 
         // Render Vegetativo Rows
-        vegSegments.forEach(s => {
+        vegSegments.forEach(item => {
+            const s = item.seg;
             vegCount++;
             vegBeds += parseFloat(s.standard_beds || 0);
             vegLiters += parseFloat(s.total_liters || (s.standard_beds * s.liters_per_bed) || 0);
-            tbodyVeg.appendChild(createSegmentRowElement(s, 'VEGETATIVO', blockSummary));
+            tbodyVeg.appendChild(createSegmentRowElement(s, 'VEGETATIVO', blockSummary, item.isDuplicated));
         });
 
         // Render Productivo Rows
-        prodSegments.forEach(s => {
+        prodSegments.forEach(item => {
+            const s = item.seg;
             prodCount++;
             prodBeds += parseFloat(s.standard_beds || 0);
             prodLiters += parseFloat(s.total_liters || (s.standard_beds * s.liters_per_bed) || 0);
-            tbodyProd.appendChild(createSegmentRowElement(s, 'PRODUCTIVO', blockSummary));
+            tbodyProd.appendChild(createSegmentRowElement(s, 'PRODUCTIVO', blockSummary, item.isDuplicated));
         });
 
         // Update Panel Summaries
@@ -1198,18 +1480,227 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('prod-panel-beds').textContent = prodBeds.toFixed(2);
         document.getElementById('prod-panel-liters').textContent = prodLiters.toFixed(1) + ' L';
 
-        // Check overall validations
+        document.querySelectorAll('.select-all-checkbox').forEach(cb => { cb.checked = false; });
+        updateBulkActionBars();
+        updateCropCardsAndPillsStatus();
         validateMasterSegments();
     }
 
-    function createSegmentRowElement(s, panelType, blockSummary) {
+    // ==================== MULTI-SELECT & BULK ACTIONS ====================
+    function updateBulkActionBars() {
+        const vegChecked = document.querySelectorAll('#tbody-veg-cuadre .row-select-checkbox:checked');
+        const prodChecked = document.querySelectorAll('#tbody-prod-cuadre .row-select-checkbox:checked');
+
+        const bulkVeg = document.getElementById('bulk-actions-veg');
+        const bulkProd = document.getElementById('bulk-actions-prod');
+        const countVeg = document.getElementById('bulk-count-veg');
+        const countMoveVeg = document.getElementById('bulk-move-count-veg');
+        const countProd = document.getElementById('bulk-count-prod');
+        const countMoveProd = document.getElementById('bulk-move-count-prod');
+
+        if (bulkVeg) {
+            if (vegChecked.length > 0) {
+                bulkVeg.style.setProperty('display', 'flex', 'important');
+                if (countVeg) countVeg.textContent = vegChecked.length;
+                if (countMoveVeg) countMoveVeg.textContent = vegChecked.length;
+            } else {
+                bulkVeg.style.setProperty('display', 'none', 'important');
+            }
+        }
+
+        if (bulkProd) {
+            if (prodChecked.length > 0) {
+                bulkProd.style.setProperty('display', 'flex', 'important');
+                if (countProd) countProd.textContent = prodChecked.length;
+                if (countMoveProd) countMoveProd.textContent = prodChecked.length;
+            } else {
+                bulkProd.style.setProperty('display', 'none', 'important');
+            }
+        }
+    }
+
+    document.querySelectorAll('.select-all-checkbox').forEach(cb => {
+        cb.addEventListener('change', function() {
+            const stage = this.dataset.stage;
+            const tbody = (stage === 'VEGETATIVO') ? document.getElementById('tbody-veg-cuadre') : document.getElementById('tbody-prod-cuadre');
+            if (tbody) {
+                tbody.querySelectorAll('.row-select-checkbox').forEach(rowCb => {
+                    rowCb.checked = cb.checked;
+                });
+            }
+            updateBulkActionBars();
+        });
+    });
+
+    document.querySelectorAll('.btn-bulk-delete').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const stage = this.dataset.stage;
+            const tbody = (stage === 'VEGETATIVO') ? document.getElementById('tbody-veg-cuadre') : document.getElementById('tbody-prod-cuadre');
+            if (!tbody) return;
+            const checkedBoxes = tbody.querySelectorAll('.row-select-checkbox:checked');
+            if (checkedBoxes.length === 0) return;
+
+            const uidsToDelete = new Set(Array.from(checkedBoxes).map(c => c.dataset.uid));
+            pushState();
+            masterSegments = masterSegments.filter(x => !uidsToDelete.has(x.uid));
+            renderCuadrePanels();
+        });
+    });
+
+    document.querySelectorAll('.btn-bulk-move').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const stage = this.dataset.stage;
+            const targetStage = this.dataset.target;
+            const tbody = (stage === 'VEGETATIVO') ? document.getElementById('tbody-veg-cuadre') : document.getElementById('tbody-prod-cuadre');
+            if (!tbody) return;
+            const checkedBoxes = tbody.querySelectorAll('.row-select-checkbox:checked');
+            if (checkedBoxes.length === 0) return;
+
+            const uidsToMove = new Set(Array.from(checkedBoxes).map(c => c.dataset.uid));
+            pushState();
+            masterSegments.forEach(x => {
+                if (uidsToMove.has(x.uid)) {
+                    x.phenological_stage = targetStage;
+                    x.is_modified = true;
+                }
+            });
+            renderCuadrePanels();
+        });
+    });
+
+    function updateCropCardsAndPillsStatus() {
+        const selectedCrop = (cropSelect ? cropSelect.value : 'ALL').trim().toUpperCase();
+
+        const cropTotals = {};
+        masterSegments.forEach(s => {
+            const cNorm = normalizeCropName(s.crop_name);
+            if (!cropTotals[cNorm]) {
+                cropTotals[cNorm] = { blocks: new Set(), stdBeds: 0, liters: 0, isModified: false };
+            }
+            if (s.block_name) cropTotals[cNorm].blocks.add((s.block_name || '').trim().toUpperCase());
+            const std = parseFloat(s.standard_beds) || 0;
+            const lit = parseFloat(s.total_liters) || roundToTank20(std * (parseFloat(s.liters_per_bed) || 5.5));
+            cropTotals[cNorm].stdBeds += std;
+            cropTotals[cNorm].liters += lit;
+            if (s.is_modified) cropTotals[cNorm].isModified = true;
+        });
+
+        // Update summary deck cards
+        document.querySelectorAll('.crop-summary-card').forEach(card => {
+            const crop = card.dataset.crop;
+            if (!crop) return;
+            const cNorm = normalizeCropName(crop);
+            const data = cropTotals[cNorm] || { blocks: new Set(), stdBeds: 0, liters: 0, isModified: false };
+
+            const blkEl = card.querySelector('.card-crop-blocks');
+            if (blkEl) blkEl.textContent = `${data.blocks.size} blk`;
+
+            const bedEl = card.querySelector('.card-crop-beds');
+            if (bedEl) bedEl.textContent = data.stdBeds.toFixed(2);
+
+            const litEl = card.querySelector('.card-crop-liters');
+            if (litEl) litEl.textContent = data.liters.toFixed(0) + ' L';
+
+            const statusEl = card.querySelector('.pill-crop-status');
+            if (statusEl) {
+                if (data.isModified) {
+                    statusEl.className = 'badge bg-success text-white border pill-crop-status';
+                    statusEl.innerHTML = '<i class="fa-solid fa-check me-1"></i>Cuadrado';
+                } else {
+                    statusEl.className = 'badge bg-light text-muted border pill-crop-status';
+                    statusEl.innerHTML = 'Censo';
+                }
+            }
+
+            const isCurrent = (selectedCrop === cNorm || selectedCrop === crop.toUpperCase());
+            card.classList.toggle('border-primary', isCurrent);
+            card.classList.toggle('bg-primary-subtle', isCurrent);
+        });
+
+        // Update pills
+        document.querySelectorAll('.btn-crop-pill').forEach(btn => {
+            const crop = btn.dataset.crop;
+            if (!crop) return;
+            const cNorm = normalizeCropName(crop);
+            const data = cropTotals[cNorm] || { isModified: false };
+            const statusEl = btn.querySelector('.pill-crop-status');
+            if (statusEl) {
+                if (data.isModified) {
+                    statusEl.className = 'badge bg-success text-white border ms-1 pill-crop-status';
+                    statusEl.innerHTML = '<i class="fa-solid fa-check me-1"></i>Cuadrado';
+                } else {
+                    statusEl.className = 'badge bg-light text-muted border ms-1 pill-crop-status';
+                    statusEl.innerHTML = 'Censo';
+                }
+            }
+        });
+    }
+
+    function updatePanelSummaries() {
+        let vegCount = 0, vegBeds = 0, vegLiters = 0;
+        let prodCount = 0, prodBeds = 0, prodLiters = 0;
+
+        const selectedCrop = (cropSelect ? cropSelect.value : 'ALL').trim().toUpperCase();
+
+        masterSegments.forEach(s => {
+            const sCrop = normalizeCropName(s.crop_name);
+            const matchCrop = (selectedCrop === 'ALL' || sCrop === selectedCrop || sCrop.includes(selectedCrop));
+            if (matchCrop) {
+                const std = parseFloat(s.standard_beds) || 0;
+                const lit = parseFloat(s.total_liters) || roundToTank20(std * (parseFloat(s.liters_per_bed) || 5.5));
+                if (s.phenological_stage === 'VEGETATIVO') {
+                    vegCount++;
+                    vegBeds += std;
+                    vegLiters += lit;
+                } else {
+                    prodCount++;
+                    prodBeds += std;
+                    prodLiters += lit;
+                }
+            }
+        });
+
+        document.getElementById('veg-panel-count').textContent = `${vegCount} registros`;
+        document.getElementById('veg-panel-beds').textContent = vegBeds.toFixed(2);
+        document.getElementById('veg-panel-liters').textContent = vegLiters.toFixed(1) + ' L';
+
+        document.getElementById('prod-panel-count').textContent = `${prodCount} registros`;
+        document.getElementById('prod-panel-beds').textContent = prodBeds.toFixed(2);
+        document.getElementById('prod-panel-liters').textContent = prodLiters.toFixed(1) + ' L';
+
+        updateCropCardsAndPillsStatus();
+    }
+
+    function markSegmentModified(s, tr) {
+        s.is_modified = true;
+        tr.classList.add('row-modified');
+        const blockBadge = tr.querySelector('.badge-block-name');
+        if (blockBadge && !blockBadge.querySelector('.mod-check')) {
+            const span = document.createElement('span');
+            span.className = 'mod-check text-success ms-1';
+            span.title = 'Modificado / Cuadrado';
+            span.innerHTML = '<i class="fa-solid fa-check"></i>';
+            blockBadge.appendChild(span);
+        }
+        updatePanelSummaries();
+    }
+
+    function createSegmentRowElement(s, panelType, blockSummary, isDuplicated) {
         const tr = document.createElement('tr');
-        tr.className = `cuadre-row ${panelType === 'VEGETATIVO' ? 'row-state-veg' : 'row-state-prod'}`;
+        let rowClasses = `cuadre-row ${panelType === 'VEGETATIVO' ? 'row-state-veg' : 'row-state-prod'}`;
+        if (s.is_modified) rowClasses += ' row-modified';
+        if (isDuplicated) rowClasses += ' row-duplicated';
+        tr.className = rowClasses;
+
         tr.id = `row-${s.uid}`;
         tr.dataset.uid = s.uid;
         tr.dataset.block = s.block_name;
         tr.dataset.crop = s.crop_name;
         tr.dataset.zone = s.zone;
+        tr.dataset.stage = panelType;
+        tr.draggable = true;
 
         const bKey = (s.block_name || '').trim().toUpperCase();
         const bInfo = blockSummary[bKey];
@@ -1220,47 +1711,68 @@ document.addEventListener('DOMContentLoaded', function() {
         const isCustomMix = s.is_custom_mix;
         const totalLiters = parseFloat(s.total_liters || (s.standard_beds * s.liters_per_bed) || 0).toFixed(1);
 
+        const dupBadge = isDuplicated ? '<i class="fa-solid fa-triangle-exclamation text-danger ms-1" title="Bloque dividido / fraccionado en múltiples pedazos" style="font-size: 0.72rem;"></i>' : '';
+        const modCheck = s.is_modified ? '<span class="mod-check text-success ms-1" title="Ajustado"><i class="fa-solid fa-check"></i></span>' : '';
+
         tr.innerHTML = `
-            <td class="text-center font-monospace text-muted py-1" style="font-size: 0.70rem;">${s.zone || '-'}</td>
-            <td class="text-center fw-bold font-monospace text-dark py-1 cursor-pointer" title="Ver comparación de este bloque">
-                <span class="badge ${panelType === 'VEGETATIVO' ? 'bg-primary-subtle text-primary border border-primary-subtle' : 'bg-warning-subtle text-dark border border-warning-subtle'} font-monospace">
-                    ${s.block_name}
+            <td class="text-center align-middle drag-handle-cell" style="width: 18px; cursor: grab;" title="Arrastrar y soltar para reordenar">
+                <i class="fa-solid fa-grip-vertical text-muted drag-handle-icon" style="font-size: 0.75rem;"></i>
+            </td>
+            <td class="text-center" style="width: 24px;">
+                <input type="checkbox" class="form-check-input row-select-checkbox" data-uid="${s.uid}" data-stage="${panelType}">
+            </td>
+            <td class="text-center fw-bold font-monospace text-dark cursor-pointer" style="width: 54px;" title="Ver comparación de este bloque">
+                <span class="badge ${panelType === 'VEGETATIVO' ? 'bg-primary-subtle text-primary border border-primary-subtle' : 'bg-warning-subtle text-dark border border-warning-subtle'} font-monospace badge-block-name py-1 px-1">
+                    ${s.block_name}${modCheck}${dupBadge}
                 </span>
             </td>
-            <td class="text-center fw-bold py-1" style="font-size: 0.70rem;">${s.suffix || 'A'}</td>
-            <td class="py-1 text-truncate" style="max-width: 80px;" title="${s.variety || s.crop_name}">${s.variety || s.crop_name}</td>
-            <td class="text-center font-monospace py-1 text-nowrap" style="font-size: 0.70rem;">
-                <span class="badge bg-light text-dark border">${s.bed_start} - ${s.bed_end}</span>
+            <td class="text-center fw-bold" style="font-size: 0.68rem; width: 22px;">${s.suffix || 'A'}</td>
+            <td class="text-truncate" style="max-width: 75px;" title="${s.variety || s.crop_name}">${s.variety || s.crop_name}</td>
+            <td class="text-center text-nowrap" style="width: 96px;">
+                <div class="d-flex align-items-center justify-content-center gap-1">
+                    <input type="number" min="1" class="form-control form-control-sm text-center row-bed-start font-monospace" style="width: 42px;" value="${s.bed_start || 1}" title="Cama inicio">
+                    <span class="text-muted small">-</span>
+                    <input type="number" min="1" class="form-control form-control-sm text-center row-bed-end font-monospace" style="width: 42px;" value="${s.bed_end || 1}" title="Cama fin">
+                </div>
             </td>
-            <td class="text-end font-monospace fw-bold py-1">${parseFloat(s.standard_beds || 1).toFixed(2)}</td>
-            <td class="text-center py-1 font-monospace" style="font-size: 0.70rem;">${s.real_age || '-'}</td>
-            <td class="text-end font-monospace py-1" style="font-size: 0.70rem;">${parseFloat(s.liters_per_bed || 5.5).toFixed(1)}</td>
-            <td class="text-end font-monospace fw-bold text-success py-1">${totalLiters}</td>
-            <td class="text-center py-1">
-                <select class="form-select form-select-sm py-0 px-1 select-row-lance" style="font-size: 0.68rem; height: 22px; width: 68px;">
-                    <option value="Lanza 2 Boquillas" ${s.spray_lance === 'Lanza 2 Boquillas' ? 'selected' : ''}>2 Boq</option>
-                    <option value="Lanza 1 Boquilla" ${s.spray_lance === 'Lanza 1 Boquilla' ? 'selected' : ''}>1 Boq</option>
-                    <option value="Lanza 3 Boquillas" ${s.spray_lance === 'Lanza 3 Boquillas' ? 'selected' : ''}>3 Boq</option>
-                    <option value="Lanza 4 Boquillas" ${s.spray_lance === 'Lanza 4 Boquillas' ? 'selected' : ''}>4 Boq</option>
-                    <option value="Lanza Especial" ${s.spray_lance === 'Lanza Especial' ? 'selected' : ''}>Espec</option>
-                    <option value="Pistola" ${s.spray_lance === 'Pistola' ? 'selected' : ''}>Pistola</option>
+            <td class="text-end" style="width: 44px;">
+                <input type="number" step="0.01" min="0.01" class="form-control form-control-sm text-end fw-bold row-std-beds font-monospace" style="width: 44px;" value="${parseFloat(s.standard_beds || 1).toFixed(2)}" title="Camas estándar">
+            </td>
+            <td class="text-center" style="width: 38px;">
+                <input type="text" class="form-control form-control-sm text-center row-age font-monospace" style="width: 36px;" value="${s.real_age || ''}" placeholder="ej. 6" title="Edad fenológica">
+            </td>
+            <td class="text-end" style="width: 42px;">
+                <input type="number" step="0.5" min="0.1" class="form-control form-control-sm text-end row-lit-bed font-monospace" style="width: 40px;" value="${parseFloat(s.liters_per_bed || 5.5).toFixed(1)}" title="Litros por cama">
+            </td>
+            <td class="text-center" style="width: 74px;">
+                <select class="form-select form-select-sm select-row-lance" style="width: 72px;" title="${s.spray_lance}">
+                    <option value="Lanza de 3 salidas (C35)" ${s.spray_lance === 'Lanza de 3 salidas (C35)' ? 'selected' : ''}>3 sal (C35)</option>
+                    <option value="Aguilón Solidago" ${s.spray_lance === 'Aguilón Solidago' ? 'selected' : ''}>Ag. Solidago</option>
+                    <option value="Aguilón 5 salidas (2D35-3C35)" ${s.spray_lance === 'Aguilón 5 salidas (2D35-3C35)' ? 'selected' : ''}>Ag. 5 sal</option>
+                    <option value="Aguilón 4 salidas (1D35-3C35)" ${s.spray_lance === 'Aguilón 4 salidas (1D35-3C35)' ? 'selected' : ''}>Ag. 4 sal</option>
+                    <option value="Lanza Veronica" ${s.spray_lance === 'Lanza Veronica' ? 'selected' : ''}>Lanza Veronica</option>
                 </select>
             </td>
-            <td class="text-end text-nowrap py-1">
-                <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-1 btn-row-adjust" title="Ajustar y dividir camas de este bloque">
-                    <i class="fa-solid fa-pen-to-square"></i>
+            <td class="text-end text-nowrap" style="width: 88px;">
+                <button type="button" class="btn btn-outline-success btn-sm btn-row-duplicate" title="Dividir / Agregar otra fracción a este bloque">
+                    <i class="fa-solid fa-plus"></i>
                 </button>
-                <button type="button" class="btn ${panelType === 'VEGETATIVO' ? 'btn-outline-warning text-dark' : 'btn-outline-primary'} btn-sm py-0 px-1 btn-row-toggle-stage" title="${panelType === 'VEGETATIVO' ? '→ Pasar bloque a Productivo' : '← Pasar bloque a Vegetativo'}">
+                <button type="button" class="btn ${panelType === 'VEGETATIVO' ? 'btn-outline-warning text-dark' : 'btn-outline-primary'} btn-sm btn-row-toggle-stage" title="${panelType === 'VEGETATIVO' ? '→ Pasar bloque a Productivo' : '← Pasar bloque a Vegetativo'}">
                     ${panelType === 'VEGETATIVO' ? '→' : '←'}
                 </button>
-                <button type="button" class="btn btn-outline-info btn-sm py-0 px-1 btn-row-mix" title="Editar mezcla de químicos para este bloque">
+                <button type="button" class="btn btn-outline-info btn-sm btn-row-mix" title="Editar mezcla de químicos para este bloque">
                     <i class="fa-solid fa-flask"></i>${isCustomMix ? '<span class="text-warning small">*</span>' : ''}
                 </button>
-                <button type="button" class="btn btn-outline-danger btn-sm py-0 px-1 btn-row-delete" title="Quitar este segmento">
-                    <i class="fa-solid fa-xmark"></i>
+                <button type="button" class="btn btn-outline-danger btn-sm btn-row-delete" title="Eliminar este segmento / bloque">
+                    <i class="fa-solid fa-trash-can"></i>
                 </button>
             </td>
         `;
+
+        // Checkbox listener
+        tr.querySelector('.row-select-checkbox')?.addEventListener('change', function() {
+            updateBulkActionBars();
+        });
 
         // Row Click: highlight matching block in both panels and open comparison card
         tr.addEventListener('click', function(e) {
@@ -1270,21 +1782,103 @@ document.addEventListener('DOMContentLoaded', function() {
             highlightAndFocusBlock(s.block_name);
         });
 
+        // Inline Bed Range Change (bed_start / bed_end)
+        const onBedRangeChange = function() {
+            pushState();
+            const startVal = parseInt(tr.querySelector('.row-bed-start').value) || 1;
+            let endVal = parseInt(tr.querySelector('.row-bed-end').value) || startVal;
+            if (endVal < startVal) {
+                endVal = startVal;
+                tr.querySelector('.row-bed-end').value = endVal;
+            }
+            s.bed_start = startVal;
+            s.bed_end = endVal;
+
+            // DO NOT modify standard_beds or total liters on bed range change.
+            // Standard beds is independent (e.g. 31.52) and controlled directly by the user.
+            markSegmentModified(s, tr);
+        };
+
+        tr.querySelector('.row-bed-start')?.addEventListener('change', onBedRangeChange);
+        tr.querySelector('.row-bed-end')?.addEventListener('change', onBedRangeChange);
+
+        // Inline Standard Beds Change
+        tr.querySelector('.row-std-beds')?.addEventListener('change', function() {
+            pushState();
+            const val = parseFloat(this.value) || 1.0;
+            s.standard_beds = val;
+            const litBed = parseFloat(tr.querySelector('.row-lit-bed').value) || (parseFloat(s.liters_per_bed) || 5.5);
+            s.total_liters = val * litBed;
+            const litCell = tr.querySelector('.row-total-liters-cell');
+            if (litCell) litCell.textContent = s.total_liters.toFixed(1);
+            markSegmentModified(s, tr);
+        });
+
+        // Inline Age Change
+        tr.querySelector('.row-age')?.addEventListener('change', function() {
+            pushState();
+            s.real_age = this.value.trim();
+            markSegmentModified(s, tr);
+        });
+
+        // Inline Liters Per Bed Change
+        tr.querySelector('.row-lit-bed')?.addEventListener('change', function() {
+            pushState();
+            const val = parseFloat(this.value) || 5.5;
+            s.liters_per_bed = val;
+            const stdVal = parseFloat(tr.querySelector('.row-std-beds').value) || (parseFloat(s.standard_beds) || 1.0);
+            s.total_liters = stdVal * val;
+            const litCell = tr.querySelector('.row-total-liters-cell');
+            if (litCell) litCell.textContent = s.total_liters.toFixed(1);
+            markSegmentModified(s, tr);
+        });
+
         // Change Spray Lance
         tr.querySelector('.select-row-lance')?.addEventListener('change', function() {
             pushState();
             s.spray_lance = this.value;
+            markSegmentModified(s, tr);
         });
 
-        // Open Adjust Block Modal
-        tr.querySelector('.btn-row-adjust')?.addEventListener('click', function() {
-            openAdjustBlockModal(s.block_name);
+        // Duplicate / Add another segment fraction for this block
+        tr.querySelector('.btn-row-duplicate')?.addEventListener('click', function() {
+            pushState();
+            const nextStart = (parseInt(s.bed_end) || 1) + 1;
+            const newSeg = {
+                uid: 'seg_' + (++uidCounter),
+                zone: s.zone || '',
+                block_name: s.block_name,
+                suffix: s.suffix || 'A',
+                crop_name: s.crop_name,
+                variety: s.variety || s.crop_name,
+                phenological_stage: s.phenological_stage || 'VEGETATIVO',
+                real_age: s.real_age || '',
+                bed_start: nextStart,
+                bed_end: nextStart + 5,
+                standard_beds: 6,
+                liters_per_bed: s.liters_per_bed || 5.5,
+                total_liters: 6 * (s.liters_per_bed || 5.5),
+                spray_lance: s.spray_lance || 'Lanza de 3 salidas (C35)',
+                products: JSON.parse(JSON.stringify(s.products || [])),
+                is_custom_mix: s.is_custom_mix || false,
+                is_additional: false,
+                is_modified: true
+            };
+            const curIdx = masterSegments.findIndex(x => x.uid === s.uid);
+            if (curIdx >= 0) {
+                masterSegments.splice(curIdx + 1, 0, newSeg);
+            } else {
+                masterSegments.push(newSeg);
+            }
+            renderCuadrePanels();
+            highlightAndFocusBlock(s.block_name);
         });
 
         // Toggle Stage (Pasar a Prod / Pasar a Veg)
         tr.querySelector('.btn-row-toggle-stage')?.addEventListener('click', function() {
             pushState();
             s.phenological_stage = (s.phenological_stage === 'VEGETATIVO') ? 'PRODUCTIVO' : 'VEGETATIVO';
+            s.is_modified = true;
             renderCuadrePanels();
             highlightAndFocusBlock(s.block_name);
         });
@@ -1294,13 +1888,12 @@ document.addEventListener('DOMContentLoaded', function() {
             openEditBlockMixModalFromSegment(s);
         });
 
-        // Delete Segment
-        tr.querySelector('.btn-row-delete')?.addEventListener('click', function() {
-            if (confirm(`¿Eliminar el segmento ${s.block_name} (${s.bed_start}-${s.bed_end}) del plan?`)) {
-                pushState();
-                masterSegments = masterSegments.filter(x => x.uid !== s.uid);
-                renderCuadrePanels();
-            }
+        // Instant Delete Segment (No blocking modal, with Undo support)
+        tr.querySelector('.btn-row-delete')?.addEventListener('click', function(e) {
+            e.stopPropagation();
+            pushState();
+            masterSegments = masterSegments.filter(x => x.uid !== s.uid);
+            renderCuadrePanels();
         });
 
         return tr;
@@ -1473,13 +2066,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     <input type="number" step="0.1" class="form-control form-control-sm text-end fw-bold text-success py-0 m-adj-total-liters" data-idx="${idx}" value="${totalLit}" style="width: 65px;">
                 </td>
                 <td class="text-center py-1">
-                    <select class="form-select form-select-sm py-0 m-adj-lance" data-idx="${idx}" style="font-size: 0.72rem;">
-                        <option value="Lanza 2 Boquillas" ${s.spray_lance === 'Lanza 2 Boquillas' ? 'selected' : ''}>Lanza 2 Boquillas</option>
-                        <option value="Lanza 1 Boquilla" ${s.spray_lance === 'Lanza 1 Boquilla' ? 'selected' : ''}>Lanza 1 Boquilla</option>
-                        <option value="Lanza 3 Boquillas" ${s.spray_lance === 'Lanza 3 Boquillas' ? 'selected' : ''}>Lanza 3 Boquillas</option>
-                        <option value="Lanza 4 Boquillas" ${s.spray_lance === 'Lanza 4 Boquillas' ? 'selected' : ''}>Lanza 4 Boquillas</option>
-                        <option value="Lanza Especial" ${s.spray_lance === 'Lanza Especial' ? 'selected' : ''}>Lanza Especial</option>
-                        <option value="Pistola" ${s.spray_lance === 'Pistola' ? 'selected' : ''}>Pistola</option>
+                    <select class="form-select form-select-sm py-0 m-adj-lance fw-semibold" data-idx="${idx}" style="font-size: 0.72rem;">
+                        <option value="Lanza de 3 salidas (C35)" ${s.spray_lance === 'Lanza de 3 salidas (C35)' ? 'selected' : ''}>Lanza de 3 salidas (C35)</option>
+                        <option value="Aguilón Solidago" ${s.spray_lance === 'Aguilón Solidago' ? 'selected' : ''}>Aguilón Solidago</option>
+                        <option value="Aguilón 5 salidas (2D35-3C35)" ${s.spray_lance === 'Aguilón 5 salidas (2D35-3C35)' ? 'selected' : ''}>Aguilón 5 salidas (2D35-3C35)</option>
+                        <option value="Aguilón 4 salidas (1D35-3C35)" ${s.spray_lance === 'Aguilón 4 salidas (1D35-3C35)' ? 'selected' : ''}>Aguilón 4 salidas (1D35-3C35)</option>
+                        <option value="Lanza Veronica" ${s.spray_lance === 'Lanza Veronica' ? 'selected' : ''}>Lanza Veronica</option>
                     </select>
                 </td>
                 <td class="text-center py-1">
@@ -1502,9 +2094,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const end = parseInt(tbody.querySelector(`.m-adj-bed-end[data-idx="${idx}"]`).value) || start;
                 modalBlockSegments[idx].bed_start = start;
                 modalBlockSegments[idx].bed_end = end;
-                modalBlockSegments[idx].standard_beds = (end - start + 1);
-                modalBlockSegments[idx].total_liters = modalBlockSegments[idx].standard_beds * (parseFloat(modalBlockSegments[idx].liters_per_bed) || 5.5);
-                renderModalAdjustRows();
+                // Keep standard_beds unchanged so user controls it manually
             });
         });
 
@@ -1618,7 +2208,7 @@ document.addEventListener('DOMContentLoaded', function() {
             standard_beds: 6,
             liters_per_bed: base.liters_per_bed || 5.5,
             total_liters: 6 * (base.liters_per_bed || 5.5),
-            spray_lance: base.spray_lance || 'Lanza 2 Boquillas',
+            spray_lance: base.spray_lance || 'Lanza de 3 salidas (C35)',
             products: JSON.parse(JSON.stringify(base.products || [])),
             is_custom_mix: base.is_custom_mix || false,
             is_additional: false
@@ -1661,157 +2251,186 @@ document.addEventListener('DOMContentLoaded', function() {
         const tbody = document.getElementById('modal-eb-tbody');
         tbody.innerHTML = '';
 
-        const isCustom = currentEditingSeg ? currentEditingSeg.is_custom_mix : false;
-        const alertMod = document.getElementById('modal-eb-alert-custom');
-        if (alertMod) alertMod.style.display = isCustom ? 'block' : 'none';
-
         if (currentBlockProducts.length === 0) {
-            tbody.innerHTML = `
-                <tr>
-                    <td colspan="6" class="text-center text-muted py-3">
-                        <i class="fa-solid fa-triangle-exclamation text-warning me-1"></i>
-                        No hay agroquímicos asignados a este bloque (mezcla vacía).
-                    </td>
-                </tr>
-            `;
+            tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted py-2">Sin agroquímicos asignados.</td></tr>`;
             return;
         }
 
         currentBlockProducts.forEach((p, idx) => {
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td class="text-center font-monospace fw-bold text-primary">${p.product_code || '-'}</td>
-                <td class="fw-semibold">${p.commercial_name || p.product_code || '-'}</td>
-                <td class="text-center">
-                    <input type="number" step="0.001" min="0" class="form-control form-control-sm text-end modal-eb-dose-input" data-idx="${idx}" value="${p.dose || 0}" style="width: 85px; display: inline-block;">
+                <td class="fw-bold text-primary py-1">${p.product_code || '-'}</td>
+                <td class="py-1">${p.commercial_name || p.product_code || '-'}</td>
+                <td class="py-1">
+                    <input type="number" step="0.001" class="form-control form-control-sm text-end fw-bold py-0 eb-prod-dose" data-idx="${idx}" value="${p.dose || 0}">
                 </td>
-                <td class="text-center small"><span class="badge bg-light text-dark border">${p.dose_unit || 'CC'}</span></td>
-                <td class="small text-muted">${p.pest || '-'}</td>
-                <td class="text-center">
-                    <button type="button" class="btn btn-outline-danger btn-sm py-0 px-2 btn-remove-block-prod" data-idx="${idx}">
-                        <i class="fa-solid fa-xmark"></i>
+                <td class="text-center font-monospace py-1">${p.dose_unit || 'CC'}</td>
+                <td class="small text-muted py-1 text-truncate" style="max-width: 130px;" title="${p.pest || ''}">${p.pest || '-'}</td>
+                <td class="text-center py-1">
+                    <button type="button" class="btn btn-outline-danger btn-sm py-0 px-1 eb-prod-del" data-idx="${idx}">
+                        <i class="fa-regular fa-trash-can"></i>
                     </button>
                 </td>
             `;
             tbody.appendChild(tr);
         });
 
-        tbody.querySelectorAll('.btn-remove-block-prod').forEach(btn => {
-            btn.addEventListener('click', function() {
+        tbody.querySelectorAll('.eb-prod-dose').forEach(inp => {
+            inp.addEventListener('change', function() {
                 const idx = parseInt(this.dataset.idx);
-                currentBlockProducts.splice(idx, 1);
-                if (currentEditingSeg) currentEditingSeg.is_custom_mix = true;
-                renderModalBlockProducts(cropName, stage);
+                currentBlockProducts[idx].dose = parseFloat(this.value) || 0.0;
             });
         });
 
-        tbody.querySelectorAll('.modal-eb-dose-input').forEach(input => {
-            input.addEventListener('change', function() {
+        tbody.querySelectorAll('.eb-prod-del').forEach(btn => {
+            btn.addEventListener('click', function() {
                 const idx = parseInt(this.dataset.idx);
-                const val = parseFloat(this.value) || 0;
-                if (currentBlockProducts[idx]) currentBlockProducts[idx].dose = val;
-                if (currentEditingSeg) currentEditingSeg.is_custom_mix = true;
-                if (alertMod) alertMod.style.display = 'block';
+                currentBlockProducts.splice(idx, 1);
+                renderModalBlockProducts(cropName, stage);
             });
         });
     }
 
-    // Restore Formula in Mix Modal
-    document.getElementById('btn-modal-eb-restore')?.addEventListener('click', function() {
-        if (!currentEditingSeg) return;
-        const defs = getDefaultFormula(currentEditingSeg.crop_name, currentEditingSeg.phenological_stage);
-        currentBlockProducts = JSON.parse(JSON.stringify(defs));
-        currentEditingSeg.is_custom_mix = false;
+    // Add Product in Mix Modal
+    document.getElementById('btn-modal-eb-add-prod')?.addEventListener('click', function() {
+        const sel = document.getElementById('modal-eb-new-product');
+        const opt = sel.options[sel.selectedIndex];
+        if (!opt || !sel.value) {
+            alert('Selecciona un agroquímico de la lista.');
+            return;
+        }
+
+        const pId = parseInt(sel.value);
+        const pCode = opt.dataset.code;
+        const pName = opt.dataset.name;
+        const pUnit = opt.dataset.unit || 'CC';
+        const doseInput = parseFloat(document.getElementById('modal-eb-new-dose').value);
+        const pDose = isNaN(doseInput) ? (parseFloat(opt.dataset.dose) || 1.0) : doseInput;
+        const pPest = opt.dataset.pest || '';
+        const pIa = opt.dataset.ia || '';
+        const pCt = opt.dataset.ct || '';
+
+        currentBlockProducts.push({
+            product_id: pId,
+            product_code: pCode,
+            commercial_name: pName,
+            dose: pDose,
+            dose_unit: pUnit,
+            pest: pPest,
+            active_ingredient: pIa,
+            toxicological_category: pCt
+        });
+
         renderModalBlockProducts(currentEditingSeg.crop_name, currentEditingSeg.phenological_stage);
+        sel.value = '';
+        document.getElementById('modal-eb-new-dose').value = '';
     });
 
-    // Add Product in Mix Modal
     document.getElementById('modal-eb-new-product')?.addEventListener('change', function() {
-        const opt = this.selectedOptions[0];
-        if (opt && opt.dataset.dose) {
-            document.getElementById('modal-eb-new-dose').value = opt.dataset.dose;
+        const opt = this.options[this.selectedIndex];
+        if (opt && this.value) {
+            document.getElementById('modal-eb-new-dose').value = opt.dataset.dose || '1.0';
             document.getElementById('modal-eb-new-unit').textContent = opt.dataset.unit || 'CC';
         }
     });
 
-    document.getElementById('btn-modal-eb-add-prod')?.addEventListener('click', function() {
-        const select = document.getElementById('modal-eb-new-product');
-        const prodId = parseInt(select.value);
-        if (!prodId) return;
-
-        const doseInput = document.getElementById('modal-eb-new-dose');
-        const dose = parseFloat(doseInput.value) || 1.0;
-        const prodObj = ACTIVE_PRODUCTS.find(p => p.id === prodId);
-        if (!prodObj) return;
-
-        if (currentBlockProducts.some(p => p.product_code === prodObj.code)) {
-            alert(`El producto ${prodObj.code} ya está en la mezcla.`);
-            return;
-        }
-
-        currentBlockProducts.push({
-            product_id: prodObj.id,
-            product_code: prodObj.code,
-            commercial_name: prodObj.name,
-            dose: dose,
-            dose_unit: prodObj.unit || 'CC',
-            pest: prodObj.pest || '',
-            active_ingredient: prodObj.ia || '',
-            toxicological_category: prodObj.ct || ''
-        });
-
-        if (currentEditingSeg) currentEditingSeg.is_custom_mix = true;
-        select.value = '';
-        doseInput.value = '';
-        renderModalBlockProducts();
-    });
-
-    // Save Mix Modal
+    // Save Mix Changes to Segment
     document.getElementById('btn-modal-eb-save')?.addEventListener('click', function() {
-        if (currentEditingSeg) {
-            pushState();
-            currentEditingSeg.products = JSON.parse(JSON.stringify(currentBlockProducts));
-            renderCuadrePanels();
-        }
+        if (!currentEditingSeg) return;
+        pushState();
+        currentEditingSeg.products = JSON.parse(JSON.stringify(currentBlockProducts));
+        currentEditingSeg.is_custom_mix = true;
         bootstrap.Modal.getInstance(document.getElementById('modalEditBlockProducts')).hide();
-        currentEditingSeg = null;
+        renderCuadrePanels();
+        highlightAndFocusBlock(currentEditingSeg.block_name);
     });
 
-    // ==================== SIEMBRA / PODA MODAL ====================
-    document.getElementById('btn-add-siembra-poda')?.addEventListener('click', function() {
+    // ==================== MODAL: AGREGAR BLOQUE MANUAL ====================
+    function updateModalSpTotalLiters() {
+        const std = parseFloat(document.getElementById('modal-sp-std-beds').value) || 0;
+        const litBed = parseFloat(document.getElementById('modal-sp-liters-bed').value) || 0;
+        const tot = roundToTank20(std * litBed);
+        const badge = document.getElementById('modal-sp-total-liters-badge');
+        if (badge) badge.textContent = tot.toFixed(0) + ' L';
+    }
+
+    function openAddBlockModal(stage) {
+        const crop = (cropSelect && cropSelect.value !== 'ALL') ? cropSelect.value : 'GYPSOPHILA';
+        const cropSelectModal = document.getElementById('modal-sp-crop');
+        if (cropSelectModal) {
+            for (let i = 0; i < cropSelectModal.options.length; i++) {
+                if (normalizeCropName(cropSelectModal.options[i].value) === normalizeCropName(crop)) {
+                    cropSelectModal.selectedIndex = i;
+                    break;
+                }
+            }
+        }
+        const stageSelect = document.getElementById('modal-sp-stage');
+        if (stageSelect && stage) {
+            stageSelect.value = stage;
+        }
+        updateModalSpTotalLiters();
         const modal = new bootstrap.Modal(document.getElementById('modalSiembraPoda'));
         modal.show();
+    }
+
+    document.getElementById('btn-add-siembra-poda')?.addEventListener('click', function() {
+        openAddBlockModal('VEGETATIVO');
+    });
+
+    document.querySelectorAll('.btn-add-block-stage').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const st = this.dataset.stage || 'VEGETATIVO';
+            openAddBlockModal(st);
+        });
     });
 
     document.getElementById('modal-sp-block')?.addEventListener('input', function() {
-        const b = this.value.trim().toUpperCase();
-        if (BLOCK_ZONE_MAP[b]) {
-            document.getElementById('modal-sp-zone').value = BLOCK_ZONE_MAP[b].zone || 'ZONA1';
-            if (BLOCK_ZONE_MAP[b].crop) {
-                const cropSelect = document.getElementById('modal-sp-crop');
-                for (let i = 0; i < cropSelect.options.length; i++) {
-                    if (cropSelect.options[i].value.toUpperCase().includes(BLOCK_ZONE_MAP[b].crop.toUpperCase())) {
-                        cropSelect.selectedIndex = i;
-                        break;
+        const val = this.value.trim().toUpperCase();
+        const info = BLOCK_ZONE_MAP[val];
+        const zoneInput = document.getElementById('modal-sp-zone');
+        if (info && zoneInput) {
+            zoneInput.value = info.zone || 'ZONA 1';
+            if (info.crop) {
+                const cropSelectModal = document.getElementById('modal-sp-crop');
+                if (cropSelectModal) {
+                    for (let i = 0; i < cropSelectModal.options.length; i++) {
+                        if (normalizeCropName(cropSelectModal.options[i].value) === normalizeCropName(info.crop)) {
+                            cropSelectModal.selectedIndex = i;
+                            break;
+                        }
                     }
                 }
             }
         }
     });
 
+    document.getElementById('modal-sp-bed-start')?.addEventListener('input', updateModalSpTotalLiters);
+    document.getElementById('modal-sp-bed-end')?.addEventListener('input', updateModalSpTotalLiters);
+    document.getElementById('modal-sp-std-beds')?.addEventListener('input', updateModalSpTotalLiters);
+    document.getElementById('modal-sp-liters-bed')?.addEventListener('input', updateModalSpTotalLiters);
+
     document.getElementById('btn-confirm-add-siembra-poda')?.addEventListener('click', function() {
-        const zone = document.getElementById('modal-sp-zone').value.trim() || 'ZONA1';
-        const block = document.getElementById('modal-sp-block').value.trim().toUpperCase() || 'BL SIEMBRA';
-        const suffix = document.getElementById('modal-sp-suffix').value.trim().toUpperCase() || 'A';
+        const block = (document.getElementById('modal-sp-block').value || '').trim().toUpperCase();
+        if (!block) {
+            alert('Por favor ingresa o selecciona el nombre del bloque (ej. BL 16).');
+            return;
+        }
+
+        const zone = (document.getElementById('modal-sp-zone').value || '').trim() || 'ZONA 1';
+        const suffix = (document.getElementById('modal-sp-suffix').value || 'A').trim().toUpperCase() || 'A';
         const crop = document.getElementById('modal-sp-crop').value;
         const stage = document.getElementById('modal-sp-stage').value;
-        const age = document.getElementById('modal-sp-age').value.trim() || '2';
+        const age = (document.getElementById('modal-sp-age').value || '16').toString().trim();
         const bedStart = parseInt(document.getElementById('modal-sp-bed-start').value) || 1;
-        const bedEnd = parseInt(document.getElementById('modal-sp-bed-end').value) || 10;
-        const stdBeds = parseFloat(document.getElementById('modal-sp-std-beds').value) || 10.0;
+        const bedEnd = parseInt(document.getElementById('modal-sp-bed-end').value) || bedStart;
+        const stdBeds = parseFloat(document.getElementById('modal-sp-std-beds').value) || (bedEnd - bedStart + 1);
         const litBed = parseFloat(document.getElementById('modal-sp-liters-bed').value) || 5.5;
+        const lance = document.getElementById('modal-sp-lance')?.value || 'Lanza de 3 salidas (C35)';
 
         const defaultProds = getDefaultFormula(crop, stage);
+        const totLit = roundToTank20(stdBeds * litBed);
 
         pushState();
         masterSegments.unshift({
@@ -1827,11 +2446,12 @@ document.addEventListener('DOMContentLoaded', function() {
             bed_end: bedEnd,
             standard_beds: stdBeds,
             liters_per_bed: litBed,
-            total_liters: stdBeds * litBed,
-            spray_lance: 'Lanza 2 Boquillas',
+            total_liters: totLit,
+            spray_lance: lance,
             products: JSON.parse(JSON.stringify(defaultProds)),
             is_custom_mix: false,
-            is_additional: true
+            is_additional: true,
+            is_modified: true
         });
 
         bootstrap.Modal.getInstance(document.getElementById('modalSiembraPoda')).hide();
@@ -1846,7 +2466,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const end = parseInt(s.bed_end) || start;
             const std = parseFloat(s.standard_beds) || (end - start + 1);
             const litBed = parseFloat(s.liters_per_bed) || 5.5;
-            const totLit = parseFloat(s.total_liters) || (std * litBed);
+            const totLit = roundToTank20(std * litBed);
 
             return {
                 zone: (s.zone || '').trim(),
@@ -1861,10 +2481,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 standard_beds: std,
                 liters_per_bed: litBed,
                 total_liters: totLit,
-                spray_lance: (s.spray_lance || 'Lanza 2 Boquillas').trim(),
+                spray_lance: (s.spray_lance || 'Lanza de 3 salidas (C35)').trim(),
                 products: Array.isArray(s.products) ? s.products : [],
                 is_custom_mix: !!s.is_custom_mix,
-                is_additional: !!s.is_additional
+                is_additional: !!s.is_additional,
+                is_modified: !!s.is_modified
             };
         });
     }
@@ -1884,7 +2505,10 @@ document.addEventListener('DOMContentLoaded', function() {
         fetch('{{ url_for("fumigacion.rotacion_guardar_revision", rotation_id=rotation.id) }}', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ segments: payload })
+            body: JSON.stringify({ 
+                segments: payload,
+                target_round_id: currentActiveRoundId
+            })
         })
         .then(res => res.json())
         .then(data => {
@@ -1906,12 +2530,48 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
+    // Reset to Census
+    document.getElementById('btn-reset-census')?.addEventListener('click', function() {
+        if (!confirm('¿Restablecer todas las camas y bloques al Censo / Estado de Cultivo oficial de la semana {{ rotation.week }}?\n\nEsto descartará borradores o ajustes temporales y recargará los bloques originales.')) {
+            return;
+        }
+        const btn = this;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Restableciendo...';
+
+        fetch('{{ url_for("fumigacion.rotacion_restablecer_censo", rotation_id=rotation.id) }}', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                alert(data.message || 'Censo restablecido exitosamente.');
+                sessionStorage.setItem('active_workflow_tab', 'tab-paso2');
+                window.location.reload();
+            } else {
+                alert('Error al restablecer: ' + (data.error || 'Desconocido'));
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fa-solid fa-arrows-rotate me-1 text-primary"></i> Restablecer Censo';
+            }
+        })
+        .catch(err => {
+            alert('Error de red al restablecer censo: ' + err);
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-arrows-rotate me-1 text-primary"></i> Restablecer Censo';
+        });
+    });
+
     // Open Assign Round Modal
     document.getElementById('btn-open-assign-modal')?.addEventListener('click', function() {
         const payload = prepareSegmentsPayload();
         if (payload.length === 0) {
             alert('No hay segmentos para asignar.');
             return;
+        }
+        const assignSelect = document.getElementById('modal-assign-round-select');
+        if (assignSelect && currentActiveRoundId) {
+            assignSelect.value = currentActiveRoundId;
         }
         const modal = new bootstrap.Modal(document.getElementById('modalAssignRound'));
         modal.show();
@@ -1920,7 +2580,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Confirm Assign Round
     document.getElementById('btn-confirm-assign-round')?.addEventListener('click', function() {
         const roundSelect = document.getElementById('modal-assign-round-select');
-        const targetRoundId = parseInt(roundSelect.value);
+        const targetRoundId = parseInt(roundSelect.value) || parseInt(currentActiveRoundId);
         if (!targetRoundId) {
             alert('Por favor selecciona la vuelta.');
             return;
@@ -1964,9 +2624,166 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
+    // Fullscreen / Collapse Sidebar Handler in Paso 2
+    const btnFullscreen = document.getElementById('btn-toggle-fullscreen');
+    function updateFullscreenButtonUI() {
+        const wrapper = document.getElementById('wrapper');
+        const isCollapsed = wrapper ? wrapper.classList.contains('toggled') : false;
+        if (btnFullscreen) {
+            if (isCollapsed) {
+                btnFullscreen.innerHTML = '<i class="fa-solid fa-compress me-1 text-warning"></i> <span id="lbl-fullscreen-text">Ver Menú Lateral</span>';
+                btnFullscreen.classList.add('btn-dark', 'text-white');
+                btnFullscreen.classList.remove('btn-outline-dark');
+            } else {
+                btnFullscreen.innerHTML = '<i class="fa-solid fa-expand me-1"></i> <span id="lbl-fullscreen-text">Pantalla Completa</span>';
+                btnFullscreen.classList.remove('btn-dark', 'text-white');
+                btnFullscreen.classList.add('btn-outline-dark');
+            }
+        }
+    }
+
+    btnFullscreen?.addEventListener('click', function() {
+        const wrapper = document.getElementById('wrapper');
+        if (wrapper) {
+            wrapper.classList.toggle('toggled');
+            const collapsed = wrapper.classList.contains('toggled');
+            localStorage.setItem('sidebar_collapsed', collapsed ? 'true' : 'false');
+            updateFullscreenButtonUI();
+            window.dispatchEvent(new CustomEvent("sidebartoggled", { detail: { collapsed: collapsed } }));
+        }
+    });
+
+    // ==================== DRAG AND DROP REORDERING ====================
+    let draggedRow = null;
+
+    function syncMasterSegmentsOrderFromDOM() {
+        pushUndoState();
+
+        const vegRows = Array.from(document.querySelectorAll('#tbody-veg-cuadre tr.cuadre-row'));
+        const prodRows = Array.from(document.querySelectorAll('#tbody-prod-cuadre tr.cuadre-row'));
+
+        const visibleUids = [...vegRows.map(r => r.dataset.uid), ...prodRows.map(r => r.dataset.uid)].filter(Boolean);
+        const uidMap = new Map();
+        masterSegments.forEach(s => uidMap.set(s.uid, s));
+
+        const orderedVisible = visibleUids.map(uid => uidMap.get(uid)).filter(Boolean);
+        const visibleSet = new Set(visibleUids);
+        const remaining = masterSegments.filter(s => !visibleSet.has(s.uid));
+
+        masterSegments = [...orderedVisible, ...remaining];
+
+        if (currentActiveRoundId && ROUND_SEGMENTS_MAP[currentActiveRoundId]) {
+            ROUND_SEGMENTS_MAP[currentActiveRoundId] = JSON.parse(JSON.stringify(masterSegments));
+        }
+    }
+
+    function initTableDragAndDrop(tbody) {
+        if (!tbody) return;
+
+        tbody.addEventListener('dragstart', function(e) {
+            const tr = e.target.closest('tr.cuadre-row');
+            if (!tr) return;
+            draggedRow = tr;
+            tr.classList.add('is-dragging');
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', tr.dataset.uid || '');
+        });
+
+        tbody.addEventListener('dragend', function(e) {
+            const tr = e.target.closest('tr.cuadre-row');
+            if (tr) tr.classList.remove('is-dragging');
+            document.querySelectorAll('.cuadre-row').forEach(r => {
+                r.classList.remove('drag-over-top', 'drag-over-bottom');
+            });
+            draggedRow = null;
+        });
+
+        tbody.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            if (!draggedRow) return;
+
+            const targetRow = e.target.closest('tr.cuadre-row');
+            document.querySelectorAll('.cuadre-row').forEach(r => {
+                r.classList.remove('drag-over-top', 'drag-over-bottom');
+            });
+
+            if (targetRow && targetRow !== draggedRow) {
+                const rect = targetRow.getBoundingClientRect();
+                const offset = e.clientY - rect.top;
+                if (offset < rect.height / 2) {
+                    targetRow.classList.add('drag-over-top');
+                } else {
+                    targetRow.classList.add('drag-over-bottom');
+                }
+            }
+        });
+
+        tbody.addEventListener('dragleave', function(e) {
+            const targetRow = e.target.closest('tr.cuadre-row');
+            if (targetRow) {
+                targetRow.classList.remove('drag-over-top', 'drag-over-bottom');
+            }
+        });
+
+        tbody.addEventListener('drop', function(e) {
+            e.preventDefault();
+            document.querySelectorAll('.cuadre-row').forEach(r => {
+                r.classList.remove('drag-over-top', 'drag-over-bottom');
+            });
+
+            if (!draggedRow) return;
+
+            const targetRow = e.target.closest('tr.cuadre-row');
+            const targetTbody = tbody;
+
+            if (targetRow && targetRow !== draggedRow) {
+                const rect = targetRow.getBoundingClientRect();
+                const offset = e.clientY - rect.top;
+                if (offset < rect.height / 2) {
+                    targetTbody.insertBefore(draggedRow, targetRow);
+                } else {
+                    targetTbody.insertBefore(draggedRow, targetRow.nextSibling);
+                }
+            } else if (!targetRow) {
+                targetTbody.appendChild(draggedRow);
+            }
+
+            // Check if dropped into a different stage
+            const targetStage = targetTbody.id === 'tbody-veg-cuadre' ? 'VEGETATIVO' : 'PRODUCTIVO';
+            const uid = draggedRow.dataset.uid;
+            const seg = masterSegments.find(s => s.uid === uid);
+            if (seg && seg.phenological_stage !== targetStage) {
+                seg.phenological_stage = targetStage;
+                seg.is_modified = true;
+                draggedRow.dataset.stage = targetStage;
+                draggedRow.className = `cuadre-row ${targetStage === 'VEGETATIVO' ? 'row-state-veg' : 'row-state-prod'} row-modified`;
+
+                const badge = draggedRow.querySelector('.badge-block-name');
+                if (badge) {
+                    badge.className = `badge ${targetStage === 'VEGETATIVO' ? 'bg-primary-subtle text-primary border border-primary-subtle' : 'bg-warning-subtle text-dark border border-warning-subtle'} font-monospace badge-block-name py-1 px-1`;
+                }
+                const toggleBtn = draggedRow.querySelector('.btn-row-toggle-stage');
+                if (toggleBtn) {
+                    toggleBtn.className = `btn ${targetStage === 'VEGETATIVO' ? 'btn-outline-warning text-dark' : 'btn-outline-primary'} btn-sm btn-row-toggle-stage`;
+                    toggleBtn.textContent = targetStage === 'VEGETATIVO' ? '→' : '←';
+                    toggleBtn.title = targetStage === 'VEGETATIVO' ? '→ Pasar bloque a Productivo' : '← Pasar bloque a Vegetativo';
+                }
+            }
+
+            syncMasterSegmentsOrderFromDOM();
+            updatePanelSummaries();
+            validateMasterSegments();
+        });
+    }
+
+    initTableDragAndDrop(document.getElementById('tbody-veg-cuadre'));
+    initTableDragAndDrop(document.getElementById('tbody-prod-cuadre'));
+
     // Initial render
     updateVarietyProgress();
     renderCuadrePanels();
+    updateFullscreenButtonUI();
 });
 </script>
 {% endblock %}

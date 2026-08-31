@@ -16,7 +16,7 @@ from app.shared.utils import (
     get_operator_for_zone, get_toxicological_color_info, 
     get_local_now, format_local_datetime, 
     is_integer_unit, round_product_amount, is_liquid_unit, is_solid_unit,
-    safe_float, safe_int
+    round_to_tank_step, safe_float, safe_int
 )
 from app.shared.audit import record_audit
 from app.modules.auth.routes import login_required, permission_required, admin_required
@@ -357,16 +357,18 @@ def rotacion_detalle(rotation_id):
     # Calculate rounds with cumulative logic for Paso 2 review
     rounds_calculated = []
     for i, r in enumerate(all_rounds):
-        # Apply cumulative: find the latest custom segments up to this round
         custom_segs = None
-        for j in range(i + 1):
-            rid = all_rounds[j].id
-            if str(rid) in review_by_round:
-                custom_segs = review_by_round[str(rid)]
-        
-        # If no round-specific review is assigned yet, fallback to working draft
-        if custom_segs is None and draft_segments:
+        if str(r.id) in review_by_round:
+            custom_segs = review_by_round[str(r.id)]
+        elif draft_segments:
             custom_segs = draft_segments
+        else:
+            # Inherit from earlier configured round if available
+            for j in range(i - 1, -1, -1):
+                earlier_rid = all_rounds[j].id
+                if str(earlier_rid) in review_by_round:
+                    custom_segs = review_by_round[str(earlier_rid)]
+                    break
 
         calc = CalculationEngine.calculate_round(r, custom_review_segments=custom_segs, cached_crop_records=cached_crop_records)
         rounds_calculated.append({
@@ -377,7 +379,7 @@ def rotacion_detalle(rotation_id):
     # Get associated requisition (forecast based on baseline rounds)
     requisition = Requisition.query.filter_by(rotation_id=rotation.id).first()
     if not requisition:
-        requisition = RequisitionService.generate_or_update_forecast(rotation.id)
+        requisition = RequisitionService.generate_or_update_forecast(rotation.id, cached_crop_records=cached_crop_records)
 
     # Generated orders for this rotation
     orders = FumigationOrder.query.filter_by(rotation_id=rotation.id).order_by(FumigationOrder.round_number.asc()).all()
@@ -392,7 +394,7 @@ def rotacion_detalle(rotation_id):
     rotation_crops = list(set([it.crop_name for r in rotation.rounds for it in r.items]))
 
     # Comparison data (Forecast vs Real Validated + Extras)
-    comp_data = RequisitionService.get_comparison_data(rotation.id)
+    comp_data = RequisitionService.get_comparison_data(rotation.id, cached_crop_records=cached_crop_records)
 
     # Distinct block to zone map from preloaded crop state records
     block_zone_map = {}
@@ -428,14 +430,21 @@ def rotacion_detalle(rotation_id):
                 rotation_formulas_map[formula_key].append(prod_entry)
 
     # Breakdown of chemical assignment by Crop / Variety
-    variety_breakdown = RequisitionService.get_variety_breakdown_data(rotation.id)
-    breakdown_crops = sorted(list(set([v['crop_name'].strip().upper() for v in variety_breakdown if v.get('crop_name')])))
+    variety_breakdown = RequisitionService.get_variety_breakdown_data(rotation.id, cached_crop_records=cached_crop_records)
+    breakdown_crops = sorted(list(set([v['crop_name'].strip() for v in variety_breakdown if v.get('crop_name')])))
     
-    # Also ensure rotation_crops has all crops
-    all_rot_crops = set([it.crop_name.strip().upper() for r in rotation.rounds for it in r.items if it.crop_name])
-    for c in breakdown_crops:
-        all_rot_crops.add(c)
-    rotation_crops = sorted(list(all_rot_crops))
+    # Only crops that actually have chemical products assigned in this rotation's rounds!
+    assigned_crops = set()
+    for r in rotation.rounds:
+        for it in r.items:
+            if it.crop_name and (it.product_id or it.product):
+                assigned_crops.add(it.crop_name.strip())
+    
+    if not assigned_crops:
+        # Fallback if no items have products yet
+        assigned_crops = set([it.crop_name.strip() for r in rotation.rounds for it in r.items if it.crop_name])
+
+    rotation_crops = sorted(list(assigned_crops), key=lambda x: x.upper())
 
     return render_template(
         'fumigacion/rotacion_detalle.html',
@@ -484,6 +493,9 @@ def rotacion_guardar_revision(rotation_id):
             clean_s['bed_end'] = safe_int(s.get('bed_end'), default=max(1, clean_s['bed_start']))
             clean_s['standard_beds'] = round(safe_float(s.get('standard_beds'), default=1.0), 2)
             clean_s['liters_per_bed'] = round(safe_float(s.get('liters_per_bed'), default=0.0), 1)
+            raw_liters = clean_s['standard_beds'] * clean_s['liters_per_bed']
+            clean_s['total_liters'] = round_to_tank_step(raw_liters, step=20)
+            clean_s['is_modified'] = bool(s.get('is_modified', False))
             
             prods = s.get('products', [])
             clean_prods = []
@@ -556,6 +568,32 @@ def rotacion_guardar_revision(rotation_id):
         return jsonify({'success': False, 'error': f'Error al procesar asignación de vuelta: {str(e)}'}), 500
 
 
+@fumigacion_bp.route('/rotaciones/<int:rotation_id>/restablecer-censo', methods=['POST'])
+@login_required
+@permission_required('fumigacion')
+def rotacion_restablecer_censo(rotation_id):
+    """
+    Resets working drafts and custom segment overrides, forcing recalculation from the official CropStateRecord census map.
+    Restricted to ADMIN users only.
+    """
+    if session.get('role') != 'ADMIN':
+        return jsonify({'success': False, 'error': 'Solo los usuarios con rol Administrador pueden restablecer el censo original.'}), 403
+
+    try:
+        rotation = Rotation.query.get_or_404(rotation_id)
+        rotation.review_data_json = None
+        rotation.review_data_by_round_json = None
+        db.session.commit()
+        record_audit('FUMIGACION', 'RESET_CENSO_DRAFT', 'Rotation', rotation.id, details={'week': rotation.week})
+        return jsonify({
+            'success': True, 
+            'message': f'Camas y bloques de la semana {rotation.week} restablecidos exitosamente al Censo oficial.'
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': f'Error al restablecer censo: {str(e)}'}), 500
+
+
 @fumigacion_bp.route('/rotaciones/<int:rotation_id>/get-cumulative', methods=['GET'])
 def rotacion_get_cumulative(rotation_id):
     """
@@ -589,7 +627,21 @@ def rotacion_get_cumulative(rotation_id):
         return jsonify({'success': False, 'error': 'Vuelta no encontrada en rotación'}), 404
     
     # Start with base calculation for this round
-    calc = CalculationEngine.calculate_round(target_round)
+    rot_week = rotation.week.strip() if rotation.week else ''
+    available_weeks = [w[0] for w in db.session.query(CropStateRecord.week).distinct().order_by(CropStateRecord.week.desc()).all() if w[0]]
+    filter_week = rot_week if rot_week in available_weeks else (available_weeks[0] if available_weeks else rot_week)
+    cached_crop_records = []
+    if filter_week:
+        cached_crop_records = CropStateRecord.query.filter(
+            CropStateRecord.crop_master.isnot(None),
+            ~CropStateRecord.crop_master.in_(['VACIO', 'DESCARTE', 'TUMBAR', 'NAN', 'TOTAL', 'TOTAL_GENERAL']),
+            CropStateRecord.week == filter_week
+        ).all()
+        for r in cached_crop_records:
+            if r.real_age is None or r.real_age < 0:
+                r.real_age = 10.0
+
+    calc = CalculationEngine.calculate_round(target_round, cached_crop_records=cached_crop_records)
     base_segments = calc.get('segments', [])
     
     # Apply cumulative adjustments from round 0 up to target_position
@@ -812,18 +864,32 @@ def orden_detalle(order_id):
                 'total_liters': 0.0,
                 'products_by_code': {}
             }
-        b = d.block_name
-        if b not in zones_map[z]['blocks']:
-            zones_map[z]['blocks'][b] = {
-                'block_name': b,
+        # Key each segment division uniquely so that divided/split blocks render as distinct visual boxes
+        seg_key = (
+            d.block_name,
+            d.suffix or 'A',
+            d.bed_range or '',
+            d.real_age,
+            d.liters_per_bed,
+            d.standard_beds,
+            d.total_liters,
+            d.operator or ''
+        )
+        if seg_key not in zones_map[z]['blocks']:
+            zones_map[z]['blocks'][seg_key] = {
+                'block_name': d.block_name,
+                'suffix': d.suffix,
+                'bed_range': d.bed_range,
                 'standard_beds': d.standard_beds,
                 'total_liters': d.total_liters,
+                'liters_per_bed': d.liters_per_bed,
+                'real_age': d.real_age,
                 'rows': []
             }
             zones_map[z]['total_beds'] += d.standard_beds
             zones_map[z]['total_liters'] += d.total_liters
             
-        zones_map[z]['blocks'][b]['rows'].append(d)
+        zones_map[z]['blocks'][seg_key]['rows'].append(d)
 
         # Accumulate product amounts for zone subtotal
         if d.product_code and d.product_code != 'SIN PRODUCTO':
@@ -1151,17 +1217,25 @@ def exportar_salidas_excel(rotation_id):
         flash("No hay órdenes generadas para esta rotación.", "warning")
         return redirect(url_for('fumigacion.rotacion_detalle', rotation_id=rotation_id))
     
-    # Same logic as ver_salidas to build data
-    scheduled_days = sorted(set(ord.scheduled_day for ord in orders))
+    # 1. Build flat detailed database rows (exact reflection of program view across all orders/vueltas)
+    all_details = [d for o in orders for d in o.details]
+    flat_rows = OrderService.get_order_details_rows(all_details)
+    df_flat = pd.DataFrame(flat_rows)
+
+    # 2. Build summary matrix by area and scheduled day
+    scheduled_days = sorted(set(ord.scheduled_day for ord in orders if ord.scheduled_day))
     data_by_area = {}
     product_info = {}
     
     for order in orders:
         for detail in order.details:
-            area = detail.crop_name
-            product_code = detail.product_code
+            area = (detail.crop_name or 'GENERAL').strip()
+            product_code = (detail.product_code or '').strip()
             day = order.scheduled_day
-            amount = detail.product_amount
+            amount = float(detail.product_amount or 0.0)
+
+            if not product_code or product_code == 'SIN PRODUCTO':
+                continue
             
             if area not in data_by_area:
                 data_by_area[area] = {}
@@ -1171,13 +1245,14 @@ def exportar_salidas_excel(rotation_id):
             if product_code not in product_info:
                 product_info[product_code] = {
                     'commercial_name': detail.commercial_name or product_code,
-                    'unit': detail.unit
+                    'unit': detail.unit or 'CC'
                 }
             
-            data_by_area[area][product_code][day] += amount
+            if day in data_by_area[area][product_code]:
+                data_by_area[area][product_code][day] += amount
     
-    # Build DataFrame
-    rows = []
+    # Build DataFrame for Matrix
+    rows_matrix = []
     for area in sorted(data_by_area.keys()):
         for product_code in sorted(data_by_area[area].keys()):
             u = (product_info[product_code]['unit'] or '').strip().upper()
@@ -1194,14 +1269,35 @@ def exportar_salidas_excel(rotation_id):
                 row[day] = int(round(qty)) if is_int else round(qty, 1)
                 total += qty
             row['Total general'] = int(round(total)) if is_int else round(total, 1)
-            rows.append(row)
+            rows_matrix.append(row)
     
-    import pandas as pd
-    df = pd.DataFrame(rows)
+    df_matrix = pd.DataFrame(rows_matrix)
     
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df.to_excel(writer, sheet_name=f"Salidas_{rotation.week}", index=False)
+        sheet_flat_name = f"Programa_Sem_{rotation.week}"[:31]
+        sheet_matrix_name = f"Matriz_Salidas_{rotation.week}"[:31]
+
+        df_flat.to_excel(writer, sheet_name=sheet_flat_name, index=False)
+        if not df_matrix.empty:
+            df_matrix.to_excel(writer, sheet_name=sheet_matrix_name, index=False)
+
+        # Style sheet_flat_name
+        ws_flat = writer.sheets[sheet_flat_name]
+        ws_flat.freeze_panes = 'A2'
+        for col in ws_flat.columns:
+            max_len = max(len(str(cell.value or '')) for cell in col)
+            col_letter = col[0].column_letter
+            ws_flat.column_dimensions[col_letter].width = max(max_len + 3, 11)
+
+        # Style sheet_matrix_name
+        if sheet_matrix_name in writer.sheets:
+            ws_matrix = writer.sheets[sheet_matrix_name]
+            ws_matrix.freeze_panes = 'A2'
+            for col in ws_matrix.columns:
+                max_len = max(len(str(cell.value or '')) for cell in col)
+                col_letter = col[0].column_letter
+                ws_matrix.column_dimensions[col_letter].width = max(max_len + 4, 12)
     
     output.seek(0)
     filename = f"Salidas_Productos_Semana_{rotation.week}.xlsx"
